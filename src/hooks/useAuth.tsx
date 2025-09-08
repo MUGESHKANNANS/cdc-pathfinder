@@ -28,6 +28,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  signInWithEmail: (params: { email: string; password: string }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -62,9 +63,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const ensureProfileExists = async (currentUser: User) => {
+    // Try to fetch
+    const existing = await fetchProfile(currentUser.id);
+    if (existing) return existing;
+
+    // Create minimal default profile
+    const defaultProfile = {
+      user_id: currentUser.id,
+      email: currentUser.email ?? '',
+      role: 'faculty' as const,
+      name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || null,
+      department: null,
+      academic_title: null,
+      position: null,
+      date_of_birth: null,
+      alternate_email: null,
+      phone_number: null,
+      alternate_phone_number: null,
+      profile_picture_url: null,
+      educational_background: null,
+      professional_experience: null,
+      specialization: null,
+      profile_completed: false,
+    };
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert(defaultProfile)
+      .select('*')
+      .single();
+
+    if (error) {
+      console.error('Error creating default profile:', error);
+      return null;
+    }
+    return data as Profile;
+  };
+
   const refreshProfile = async () => {
     if (user) {
-      const profileData = await fetchProfile(user.id);
+      const profileData = await ensureProfileExists(user);
       setProfile(profileData);
     }
   };
@@ -79,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session?.user) {
           // Defer profile fetch to avoid deadlock
           setTimeout(async () => {
-            const profileData = await fetchProfile(session.user.id);
+            const profileData = await ensureProfileExists(session.user!);
             setProfile(profileData);
             setLoading(false);
           }, 0);
@@ -97,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (session?.user) {
         setTimeout(async () => {
-          const profileData = await fetchProfile(session.user.id);
+          const profileData = await ensureProfileExists(session.user!);
           setProfile(profileData);
           setLoading(false);
         }, 0);
@@ -120,6 +159,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
+      if (error) {
+        toast({
+          title: "Authentication Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Authentication Error",
+        description: "An unexpected error occurred during sign in.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const signInWithEmail = async ({ email, password }: { email: string; password: string }) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         toast({
           title: "Authentication Error",
@@ -160,6 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     profile,
     loading,
+    signInWithEmail,
     signInWithGoogle,
     signOut,
     refreshProfile,
