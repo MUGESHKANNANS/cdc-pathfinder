@@ -15,7 +15,7 @@ const DashboardLayout = () => {
     );
   }
 
-  if (!user || !profile) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 

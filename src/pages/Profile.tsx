@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,10 +6,21 @@ import { useAuth } from '@/hooks/useAuth';
 import { Edit, Mail, Phone, Calendar, MapPin, GraduationCap } from 'lucide-react';
 
 const Profile = () => {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+
+  useEffect(() => {
+    if (!profile) {
+      refreshProfile();
+    }
+  }, [profile, refreshProfile]);
 
   if (!profile) {
-    return <div>Loading profile...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground gap-4">
+        <div>Loading profile...</div>
+        <Button variant="outline" onClick={refreshProfile}>Retry</Button>
+      </div>
+    );
   }
 
   return (

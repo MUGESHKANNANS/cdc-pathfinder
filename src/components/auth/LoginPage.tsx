@@ -1,12 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Chrome, GraduationCap, Users, Building2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { GraduationCap } from 'lucide-react';
 
 const LoginPage = () => {
-  const { user, loading, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithEmail } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const year = new Date().getFullYear();
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await signInWithEmail({ email, password });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   // Redirect authenticated users
   if (user && !loading) {
@@ -15,80 +32,112 @@ const LoginPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="bg-gradient-primary rounded-full p-4 shadow-lg">
-              <GraduationCap className="h-12 w-12 text-primary-foreground" />
+    <div className="relative h-screen overflow-hidden bg-white grid grid-cols-1 md:grid-cols-2">
+      {/* Left panel */}
+      <div
+        className="relative hidden md:flex flex-col justify-between p-10 overflow-hidden text-white"
+        style={{
+          backgroundImage: "url('/placeholder.svg')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="absolute inset-0 bg-pink-600/50" />
+        <div className="relative">
+          <div className="flex items-center space-x-3">
+            <div className="bg-white/20 rounded-lg p-2">
+              <GraduationCap className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h2 className="font-bold text-white">CDC Portal</h2>
+              <p className="text-xs text-white/80">KPRIET</p>
             </div>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              CDC Portal
-            </h1>
-            <h2 className="text-xl font-semibold text-foreground">
-              KPRIET Career Development Cell
-            </h2>
-            <p className="text-muted-foreground">
-              Faculty & Student Career Visualization Platform
-            </p>
+          <div className="mt-16 space-y-4">
+            <h1 className="text-4xl font-bold">Shape Your Career</h1>
+            <p className="text-white/90 max-w-sm">Visualize goals, track progress, and collaborate with CDC — all in one place.</p>
           </div>
         </div>
+        <div className="relative space-y-2 text-white/70 text-sm">
+          <p>© {year} KPRIET Career Development Cell</p>
+          <p>Empowering careers through technology</p>
+        </div>
+      </div>
 
-        {/* Login Card */}
-        <Card className="shadow-xl border-0 bg-gradient-card">
-          <CardHeader className="text-center space-y-4">
-            <CardTitle className="text-2xl font-semibold">Welcome Back</CardTitle>
-            <CardDescription className="text-base">
-              Sign in to access your CDC dashboard
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Button
-              onClick={signInWithGoogle}
-              size="lg"
-              className="w-full h-12 text-base font-medium bg-gradient-primary hover:bg-primary-hover transition-all duration-200"
-            >
-              <Chrome className="mr-3 h-5 w-5" />
-              Sign in with Google
-            </Button>
+      {/* Right panel (form) */}
+      <div className="flex items-center justify-center p-6 md:p-12">
+        <div className="w-full max-w-md space-y-8">
+          {/* Header */}
+          <div className="text-left space-y-2">
+            <h2 className="text-2xl font-semibold text-gray-900">Welcome back</h2>
+            <p className="text-sm text-gray-500">Sign in to continue to your CDC dashboard.</p>
+          </div>
 
-            {/* Features */}
-            <div className="pt-6 border-t border-border/50">
-              <p className="text-sm text-muted-foreground text-center mb-4">
-                Platform Features
-              </p>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center space-x-3 text-sm">
-                  <Users className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground">Role-based Access Control</span>
+          {/* Login Card */}
+          <Card className="shadow-sm border border-gray-200 bg-white">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-lg font-medium text-gray-900">Your credentials</CardTitle>
+              <CardDescription className="text-sm text-gray-500">
+                Enter your email and password to continue
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Email / Password */}
+              <form onSubmit={handleEmailSignIn} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                  />
                 </div>
-                <div className="flex items-center space-x-3 text-sm">
-                  <Building2 className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground">Event & Task Management</span>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
                 </div>
-                <div className="flex items-center space-x-3 text-sm">
-                  <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground">Career Development Tracking</span>
+                <Button type="submit" size="lg" className="w-full h-11 text-base font-medium bg-pink-600 text-white hover:bg-pink-700" disabled={submitting}>
+                  {submitting ? 'Signing in…' : 'Sign in'}
+                </Button>
+              </form>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">Or continue with</span>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Footer */}
-        <div className="text-center text-sm text-muted-foreground">
-          <p>© 2024 KPRIET Career Development Cell</p>
-          <p className="mt-1">Empowering careers through technology</p>
+              <Button
+                onClick={signInWithGoogle}
+                size="lg"
+                variant="outline"
+                className="w-full h-11 justify-center gap-2 text-base font-medium border-pink-200 text-pink-700 hover:bg-pink-600 hover:text-white transition-all duration-200"
+              >
+                <img src="/google.svg" alt="Google" className="h-5 w-5" />
+                <span>Continue with Google</span>
+              </Button>
+
+              
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
