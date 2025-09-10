@@ -1,1 +1,4 @@
 project_id = "gincficjqtrnklukegxa"
+
+[functions.create-faculty-account]
+verify_jwt = true

@@ -3,9 +3,10 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from './Sidebar';
 import { TopNav } from './TopNav';
+import FirstTimePasswordChange from '@/components/auth/FirstTimePasswordChange';
 
 const DashboardLayout = () => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, needsPasswordChange } = useAuth();
 
   if (loading) {
     return (
@@ -17,6 +18,11 @@ const DashboardLayout = () => {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Show password change screen for first-time faculty users
+  if (needsPasswordChange) {
+    return <FirstTimePasswordChange />;
   }
 
   return (

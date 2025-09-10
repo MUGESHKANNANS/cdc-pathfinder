@@ -8,6 +8,7 @@ import LoginPage from "@/components/auth/LoginPage";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
+import FacultyManagement from "@/pages/FacultyManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,7 +30,7 @@ const App = () => (
               <Route path="tasks" element={<div className="p-8 text-center text-muted-foreground">Tasks module coming soon...</div>} />
               <Route path="training" element={<div className="p-8 text-center text-muted-foreground">Training module coming soon...</div>} />
               <Route path="placements" element={<div className="p-8 text-center text-muted-foreground">Placements module coming soon...</div>} />
-              <Route path="faculty" element={<div className="p-8 text-center text-muted-foreground">Faculty management coming soon...</div>} />
+              <Route path="faculty" element={<FacultyManagement />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

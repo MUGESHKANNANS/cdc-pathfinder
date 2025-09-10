@@ -28,6 +28,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  needsPasswordChange: boolean;
   signInWithEmail: (params: { email: string; password: string }) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -41,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const { toast } = useToast();
 
   const fetchProfile = async (userId: string) => {
@@ -66,7 +68,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ensureProfileExists = async (currentUser: User) => {
     // Try to fetch
     const existing = await fetchProfile(currentUser.id);
-    if (existing) return existing;
+    if (existing) {
+      // Check if this is a faculty user created by director (needs password change)
+      const isCreatedByDirector = currentUser.user_metadata?.created_by_director === true;
+      const isFirstLogin = !existing.profile_completed && isCreatedByDirector;
+      setNeedsPasswordChange(isFirstLogin);
+      return existing;
+    }
 
     // Create minimal default profile
     const defaultProfile = {
@@ -105,6 +113,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const profileData = await ensureProfileExists(user);
       setProfile(profileData);
+      // Reset password change requirement after profile refresh
+      if (profileData?.profile_completed) {
+        setNeedsPasswordChange(false);
+      }
     }
   };
 
@@ -218,6 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     profile,
     loading,
+    needsPasswordChange,
     signInWithEmail,
     signInWithGoogle,
     signOut,
