@@ -69,9 +69,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Try to fetch
     const existing = await fetchProfile(currentUser.id);
     if (existing) {
-      // Check if this is a faculty user created by director (needs password change)
+      // Require password change only if created by director AND password not yet changed
       const isCreatedByDirector = currentUser.user_metadata?.created_by_director === true;
-      const isFirstLogin = !existing.profile_completed && isCreatedByDirector;
+      const passwordChanged = currentUser.user_metadata?.password_changed === true;
+      const isFirstLogin = isCreatedByDirector && !passwordChanged;
       setNeedsPasswordChange(isFirstLogin);
       return existing;
     }

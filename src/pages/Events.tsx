@@ -179,6 +179,46 @@ const Events = () => {
     }
   };
 
+  const downloadEventDataWithAttachment = async (
+    evt: Event & { signed_image_url?: string | null; is_image?: boolean }
+  ) => {
+    try {
+      // Download event JSON first
+      const eventData = {
+        id: evt.id,
+        title: evt.title,
+        description: evt.description,
+        organized_by: evt.organized_by,
+        event_date: evt.event_date,
+        event_time: evt.event_time,
+        venue: evt.venue,
+        category: evt.category,
+        attachment_url: evt.attachment_url,
+        created_by: evt.created_by,
+        created_at: evt.created_at,
+      };
+      const blob = new Blob([JSON.stringify(eventData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${evt.title.replace(/[^a-z0-9\-\_\s]/gi, '_')}-event.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Then download attachment if present
+      if (evt.attachment_url) {
+        await downloadAttachment(evt.attachment_url, `${evt.title}-attachment`);
+      }
+    } catch (error) {
+      console.error('Error downloading event data and attachment:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to download event data.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -339,6 +379,14 @@ const Events = () => {
                         <Download className="h-4 w-4" />
                       </Button>
                     )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => downloadEventDataWithAttachment(event)}
+                      title="Download event data and attachment"
+                    >
+                      Download Data
+                    </Button>
                   </div>
                 </div>
               </CardContent>
