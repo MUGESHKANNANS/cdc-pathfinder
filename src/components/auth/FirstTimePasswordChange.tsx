@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff } from 'lucide-react';
 
 const FirstTimePasswordChange = () => {
   const { user, refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [passwords, setPasswords] = useState({
     newPassword: '',
@@ -50,14 +52,18 @@ const FirstTimePasswordChange = () => {
 
       if (passwordError) throw passwordError;
 
-      // Mark profile as needing completion (this will be handled in the profile page)
-      toast({
-        title: 'Success',
-        description: 'Password updated successfully. Please complete your profile.',
+      // Mark password as changed in user metadata so gate won't show again
+      await supabase.auth.updateUser({
+        data: { password_changed: true }
       });
 
-      // Refresh profile to trigger any state updates
+      // Refresh profile and redirect to dashboard
       await refreshProfile();
+      toast({
+        title: 'Password Updated',
+        description: 'Password changed successfully. Redirecting to dashboard...',
+      });
+      navigate('/dashboard');
       
     } catch (error: any) {
       console.error('Error changing password:', error);
@@ -78,9 +84,9 @@ const FirstTimePasswordChange = () => {
           <div className="mx-auto bg-primary/10 rounded-full p-3 w-fit">
             <Lock className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Change Your Password</CardTitle>
+          <CardTitle className="text-2xl">Change Your Temporary Password</CardTitle>
           <CardDescription>
-            Welcome! Please change your temporary password to continue.
+            Please change your temporary password to continue to the dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent>
