@@ -9,6 +9,8 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Dashboard from "@/pages/Dashboard";
 import Profile from "@/pages/Profile";
 import FacultyManagement from "@/pages/FacultyManagement";
+import Events from "@/pages/Events";
+import CreateEvent from "@/pages/CreateEvent";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,7 +28,8 @@ const App = () => (
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="events" element={<div className="p-8 text-center text-muted-foreground">Events module coming soon...</div>} />
+              <Route path="events" element={<Events />} />
+              <Route path="events/create" element={<CreateEvent />} />
               <Route path="tasks" element={<div className="p-8 text-center text-muted-foreground">Tasks module coming soon...</div>} />
               <Route path="training" element={<div className="p-8 text-center text-muted-foreground">Training module coming soon...</div>} />
               <Route path="placements" element={<div className="p-8 text-center text-muted-foreground">Placements module coming soon...</div>} />

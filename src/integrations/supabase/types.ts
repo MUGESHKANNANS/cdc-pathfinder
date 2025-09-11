@@ -45,6 +45,7 @@ export type Database = {
       }
       events: {
         Row: {
+          attachment_url: string | null
           category: string | null
           created_at: string
           created_by: string | null
@@ -58,6 +59,7 @@ export type Database = {
           venue: string | null
         }
         Insert: {
+          attachment_url?: string | null
           category?: string | null
           created_at?: string
           created_by?: string | null
@@ -71,6 +73,7 @@ export type Database = {
           venue?: string | null
         }
         Update: {
+          attachment_url?: string | null
           category?: string | null
           created_at?: string
           created_by?: string | null
