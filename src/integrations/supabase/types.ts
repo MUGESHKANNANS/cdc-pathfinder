@@ -198,7 +198,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_cdc_director: {
+        Args: { _uid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       user_role: "cdc_director" | "faculty"
