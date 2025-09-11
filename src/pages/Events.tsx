@@ -10,6 +10,7 @@ import { Calendar, Clock, MapPin, User, Download, Plus, Search } from 'lucide-re
 import { format, isToday, isPast, isFuture } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 interface Event {
   id: string;
@@ -35,12 +36,14 @@ interface Assignment {
 const Events = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<(Event & { signed_image_url?: string | null; is_image?: boolean })[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'past' | 'today' | 'upcoming'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<(Event & { signed_image_url?: string | null; is_image?: boolean }) | null>(null);
 
   const isDirector = profile?.role === 'cdc_director';
 
@@ -59,7 +62,24 @@ const Events = () => {
         .order('event_date', { ascending: false });
 
       if (error) throw error;
-      setEvents(data || []);
+      const eventsWithSignedUrls = await Promise.all((data || []).map(async (evt) => {
+        const path = evt.attachment_url || '';
+        const isImage = /\.(png|jpg|jpeg)$/i.test(path);
+        if (path && isImage) {
+          try {
+            const { data: signed, error: signedErr } = await supabase
+              .storage
+              .from('event-attachments')
+              .createSignedUrl(path, 60 * 60); // 1 hour
+            if (signedErr) throw signedErr;
+            return { ...evt, signed_image_url: signed?.signedUrl || null, is_image: true };
+          } catch {
+            return { ...evt, signed_image_url: null, is_image: true };
+          }
+        }
+        return { ...evt, signed_image_url: null, is_image: false };
+      }));
+      setEvents(eventsWithSignedUrls);
     } catch (error) {
       console.error('Error fetching events:', error);
       toast({
@@ -233,64 +253,80 @@ const Events = () => {
         {filteredEvents.map((event) => {
           const status = getEventStatus(event.event_date);
           const isAssigned = !isDirector && isAssignedToEvent(event.id);
+          const bannerUrl = event.is_image && event.signed_image_url ? event.signed_image_url : '/placeholder.svg';
           
           return (
-            <Card key={event.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{event.title}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {event.category && (
-                        <Badge variant="secondary" className="text-xs">
-                          {event.category}
-                        </Badge>
-                      )}
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge className={`text-xs ${getStatusColor(status)}`}>
-                      {getStatusIcon(status)} {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </Badge>
+            <Card
+              key={event.id}
+              className="group overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm transition-all duration-300 hover:shadow-xl hover:border-border"
+            >
+              <div className="relative h-40 w-full overflow-hidden">
+                <img
+                  src={bannerUrl}
+                  alt={event.title}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {event.category && (
+                      <Badge variant="secondary" className="bg-white/90 text-foreground backdrop-blur px-2 py-0.5 text-[11px]">
+                        {event.category}
+                      </Badge>
+                    )}
                     {isAssigned && (
-                      <Badge variant="outline" className="text-xs border-primary text-primary">
+                      <Badge variant="outline" className="border-white/70 text-white px-2 py-0.5 text-[11px]">
                         Assigned
                       </Badge>
                     )}
                   </div>
+                  <Badge className={`px-2 py-0.5 text-[11px] ${getStatusColor(status)} bg-white/90 backdrop-blur`}>
+                    {getStatusIcon(status)} {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    {format(new Date(event.event_date), 'PPP')}
-                  </div>
-                  {event.event_time && (
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4 mr-2" />
-                      {event.event_time}
-                    </div>
-                  )}
-                  {event.venue && (
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {event.venue}
-                    </div>
-                  )}
+                <div className="absolute inset-x-4 bottom-3">
+                  <h3 className="text-white font-semibold text-lg drop-shadow-sm">
+                    {event.title}
+                  </h3>
                   {event.organized_by && (
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <User className="h-4 w-4 mr-2" />
-                      {event.organized_by}
-                    </div>
+                    <p className="text-white/90 text-xs mt-0.5">by {event.organized_by}</p>
                   )}
+                </div>
+              </div>
+
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-center">
+                      <Calendar className="h-4 w-4 mr-2 text-foreground/70" />
+                      {format(new Date(event.event_date), 'PPP')}
+                    </div>
+                    {event.event_time && (
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-2 text-foreground/70" />
+                        {event.event_time}
+                      </div>
+                    )}
+                    {event.venue && (
+                      <div className="flex items-center sm:col-span-2">
+                        <MapPin className="h-4 w-4 mr-2 text-foreground/70" />
+                        {event.venue}
+                      </div>
+                    )}
+                  </div>
+
                   {event.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
                       {event.description}
                     </p>
                   )}
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm" className="flex-1">
+
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => { setSelectedEvent(event); setDetailsOpen(true); }}
+                    >
                       View Details
                     </Button>
                     {event.attachment_url && (
@@ -298,6 +334,7 @@ const Events = () => {
                         variant="outline" 
                         size="sm"
                         onClick={() => downloadAttachment(event.attachment_url!, `${event.title}-attachment`)}
+                        title="Download attachment"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
@@ -334,6 +371,77 @@ const Events = () => {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+          {selectedEvent && (
+            <div className="w-full">
+              <div className="relative h-48 w-full overflow-hidden">
+                <img
+                  src={selectedEvent.is_image && selectedEvent.signed_image_url ? selectedEvent.signed_image_url : '/placeholder.svg'}
+                  alt={selectedEvent.title}
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                <div className="absolute bottom-3 left-4 right-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-white text-xl font-semibold">{selectedEvent.title}</h2>
+                      {selectedEvent.organized_by && (
+                        <p className="text-white/90 text-xs">by {selectedEvent.organized_by}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedEvent.category && (
+                        <Badge variant="secondary" className="bg-white/90 text-foreground backdrop-blur px-2 py-0.5 text-[11px]">
+                          {selectedEvent.category}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center">
+                    <Calendar className="h-4 w-4 mr-2 text-foreground/70" />
+                    {format(new Date(selectedEvent.event_date), 'PPP')}
+                  </div>
+                  {selectedEvent.event_time && (
+                    <div className="flex items-center">
+                      <Clock className="h-4 w-4 mr-2 text-foreground/70" />
+                      {selectedEvent.event_time}
+                    </div>
+                  )}
+                  {selectedEvent.venue && (
+                    <div className="flex items-center sm:col-span-2">
+                      <MapPin className="h-4 w-4 mr-2 text-foreground/70" />
+                      {selectedEvent.venue}
+                    </div>
+                  )}
+                </div>
+                {selectedEvent.description && (
+                  <div>
+                    <h4 className="text-sm font-medium text-foreground mb-1">Description</h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{selectedEvent.description}</p>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-2">
+                  {selectedEvent.attachment_url && (
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadAttachment(selectedEvent.attachment_url!, `${selectedEvent.title}-attachment`)}
+                    >
+                      <Download className="h-4 w-4 mr-2" /> Download
+                    </Button>
+                  )}
+                  <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
