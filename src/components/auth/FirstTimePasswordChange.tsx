@@ -57,6 +57,15 @@ const FirstTimePasswordChange = () => {
         data: { password_changed: true }
       });
 
+      // Mark profile as completed so super admin sees status as completed
+      if (user?.id) {
+        const { error: profileUpdateError } = await supabase
+          .from('profiles')
+          .update({ profile_completed: true })
+          .eq('user_id', user.id);
+        if (profileUpdateError) throw profileUpdateError;
+      }
+
       // Refresh profile and redirect to dashboard
       await refreshProfile();
       toast({
