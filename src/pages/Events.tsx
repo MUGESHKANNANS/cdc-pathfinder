@@ -164,9 +164,13 @@ const Events = () => {
       if (error) throw error;
 
       const url = URL.createObjectURL(data);
+      const dotIndex = attachmentUrl.lastIndexOf('.');
+      const ext = dotIndex !== -1 ? attachmentUrl.slice(dotIndex + 1) : '';
+      const safeBase = fileName.replace(/[^a-z0-9\-\_\s]/gi, '_');
+      const finalName = ext ? `${safeBase}.${ext}` : safeBase;
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = finalName;
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
@@ -179,41 +183,65 @@ const Events = () => {
     }
   };
 
-  const downloadEventDataWithAttachment = async (
+  const downloadEventPdfAndAttachment = async (
     evt: Event & { signed_image_url?: string | null; is_image?: boolean }
   ) => {
     try {
-      // Download event JSON first
-      const eventData = {
-        id: evt.id,
-        title: evt.title,
-        description: evt.description,
-        organized_by: evt.organized_by,
-        event_date: evt.event_date,
-        event_time: evt.event_time,
-        venue: evt.venue,
-        category: evt.category,
-        attachment_url: evt.attachment_url,
-        created_by: evt.created_by,
-        created_at: evt.created_at,
-      };
-      const blob = new Blob([JSON.stringify(eventData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      const [{ jsPDF }, JSZip] = await Promise.all([
+        import('jspdf'),
+        import('jszip')
+      ]);
+      const doc = new jsPDF();
+
+      const left = 14;
+      let y = 20;
+      const lineGap = 8;
+
+      doc.setFontSize(16);
+      doc.text('Event Details', left, y);
+      y += lineGap + 2;
+      doc.setFontSize(12);
+      doc.text(`Title: ${evt.title}`, left, y); y += lineGap;
+      if (evt.organized_by) { doc.text(`Organizer: ${evt.organized_by}`, left, y); y += lineGap; }
+      doc.text(`Date: ${format(new Date(evt.event_date), 'PPP')}`, left, y); y += lineGap;
+      if (evt.event_time) { doc.text(`Time: ${evt.event_time}`, left, y); y += lineGap; }
+      if (evt.venue) { doc.text(`Venue: ${evt.venue}`, left, y); y += lineGap; }
+      if (evt.category) { doc.text(`Category: ${evt.category}`, left, y); y += lineGap; }
+
+      if (evt.description) {
+        const split = doc.splitTextToSize(`Description: ${evt.description}`, 180);
+        doc.text(split, left, y);
+      }
+
+      const pdfBlob = doc.output('blob');
+
+      const zip = new JSZip.default();
+      const safeTitle = evt.title.replace(/[^a-z0-9\-\_\s]/gi, '_');
+      zip.file(`${safeTitle}-event.pdf`, pdfBlob);
+
+      if (evt.attachment_url) {
+        const { data, error } = await supabase.storage
+          .from('event-attachments')
+          .download(evt.attachment_url);
+        if (error) throw error;
+        const dotIndex = evt.attachment_url.lastIndexOf('.');
+        const ext = dotIndex !== -1 ? evt.attachment_url.slice(dotIndex + 1) : '';
+        const attachName = ext ? `${safeTitle}-attachment.${ext}` : `${safeTitle}-attachment`;
+        zip.file(attachName, data);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${evt.title.replace(/[^a-z0-9\-\_\s]/gi, '_')}-event.json`;
+      a.download = `${safeTitle}-event.zip`;
       a.click();
       URL.revokeObjectURL(url);
-
-      // Then download attachment if present
-      if (evt.attachment_url) {
-        await downloadAttachment(evt.attachment_url, `${evt.title}-attachment`);
-      }
     } catch (error) {
-      console.error('Error downloading event data and attachment:', error);
+      console.error('Error generating ZIP with PDF/attachment:', error);
       toast({
         title: 'Error',
-        description: 'Failed to download event data.',
+        description: 'Failed to download event ZIP.',
         variant: 'destructive',
       });
     }
@@ -369,23 +397,13 @@ const Events = () => {
                     >
                       View Details
                     </Button>
-                    {event.attachment_url && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => downloadAttachment(event.attachment_url!, `${event.title}-attachment`)}
-                        title="Download attachment"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => downloadEventDataWithAttachment(event)}
-                      title="Download event data and attachment"
+                      onClick={() => downloadEventPdfAndAttachment(event)}
+                      title="Download event PDF and attachment"
                     >
-                      Download Data
+                      <Download className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
