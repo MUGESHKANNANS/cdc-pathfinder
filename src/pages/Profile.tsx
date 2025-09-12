@@ -3,10 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
-import { Edit, Mail, Phone, Calendar, MapPin, GraduationCap } from 'lucide-react';
+import { Edit, Mail, Phone, Calendar, MapPin, GraduationCap, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const { profile, refreshProfile } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!profile) {
@@ -33,10 +35,22 @@ const Profile = () => {
             Manage your professional information and settings
           </p>
         </div>
-        <Button className="bg-gradient-primary">
-          <Edit className="mr-2 h-4 w-4" />
-          Edit Profile
-        </Button>
+        <div className="flex space-x-2">
+          <Button 
+            className="bg-gradient-primary"
+            onClick={() => navigate('/profile/edit')}
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Edit Profile
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => navigate('/profile/change-password')}
+          >
+            <Lock className="mr-2 h-4 w-4" />
+            Change Password
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

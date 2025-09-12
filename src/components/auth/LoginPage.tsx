@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,6 +113,17 @@ const LoginPage = () => {
                     required
                   />
                 </div>
+
+                {/* Forgot Password Link */}
+                <div className="text-center">
+                  <Link 
+                    to="/forgot-password" 
+                    className="text-sm text-pink-600 hover:text-pink-700 underline"
+                  >
+                    Forgot your password?
+                  </Link>
+                </div>
+
                 <Button type="submit" size="lg" className="w-full h-11 text-base font-medium bg-pink-600 text-white hover:bg-pink-700" disabled={submitting}>
                   {submitting ? 'Signing in…' : 'Sign in'}
                 </Button>

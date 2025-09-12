@@ -31,6 +31,7 @@ const Sidebar = () => {
 
   const directorActions = [
     { name: 'Manage Faculty', href: '/faculty', icon: Users },
+    { name: 'Faculty Directory', href: '/faculty/directory', icon: Users },
     { name: 'Create Event', href: '/events/create', icon: Plus },
     { name: 'Create Task', href: '/tasks/create', icon: Plus },
   ];
