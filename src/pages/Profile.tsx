@@ -62,11 +62,11 @@ const Profile = () => {
                 {profile.name ? profile.name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
               </div>
               <CardTitle className="text-xl">{profile.name || 'Update Name'}</CardTitle>
-              <CardDescription>
+              <div>
                 <Badge className={profile.role === 'cdc_director' ? 'bg-primary' : 'bg-accent'}>
                   {profile.role === 'cdc_director' ? 'CDC Director' : 'Faculty Member'}
                 </Badge>
-              </CardDescription>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center space-x-2 text-sm">

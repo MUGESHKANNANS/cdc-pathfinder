@@ -16,6 +16,7 @@ import EditFacultyProfile from "@/pages/EditFacultyProfile";
 import ChangePassword from "@/components/auth/ChangePassword";
 import ForgotPassword from "@/components/auth/ForgotPassword";
 import ResetPassword from "@/components/auth/ResetPassword";
+import Tasks from "@/pages/Tasks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,7 +40,7 @@ const App = () => (
               <Route path="profile/change-password" element={<ChangePassword />} />
               <Route path="events" element={<Events />} />
               <Route path="events/create" element={<CreateEvent />} />
-              <Route path="tasks" element={<div className="p-8 text-center text-muted-foreground">Tasks module coming soon...</div>} />
+              <Route path="tasks" element={<Tasks />} />
               <Route path="training" element={<div className="p-8 text-center text-muted-foreground">Training module coming soon...</div>} />
               <Route path="placements" element={<div className="p-8 text-center text-muted-foreground">Placements module coming soon...</div>} />
               <Route path="faculty" element={<FacultyManagement />} />
