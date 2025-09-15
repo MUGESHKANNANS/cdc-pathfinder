@@ -164,7 +164,7 @@ const FacultyDirectory = () => {
           <h1 className="text-3xl font-bold text-foreground">Faculty Directory</h1>
           <p className="text-muted-foreground">Search, filter, and manage all faculty profiles</p>
         </div>
-        <Button onClick={() => navigate('/faculty')} variant="outline">
+        <Button onClick={() => navigate('/faculty', { state: { openCreateDialog: true } })} variant="outline">
           <UserPlus className="mr-2 h-4 w-4" />
           Create Faculty
         </Button>

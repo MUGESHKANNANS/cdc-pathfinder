@@ -13,7 +13,10 @@ import {
   Plus,
   Clock,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Shield,
+  Settings,
+  Activity
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -169,9 +172,17 @@ const Dashboard = () => {
             }
           </p>
         </div>
-        <Badge variant="secondary" className="px-3 py-1">
-          {profile?.role === 'cdc_director' ? 'CDC Director' : 'Faculty Member'}
-        </Badge>
+        <div className="flex items-center space-x-2">
+          {isDirector && (
+            <Badge variant="outline" className="px-3 py-1 flex items-center">
+              <Shield className="mr-2 h-4 w-4" />
+              SuperAdmin
+            </Badge>
+          )}
+          <Badge variant="secondary" className="px-3 py-1">
+            {profile?.role === 'cdc_director' ? 'CDC Director' : 'Faculty Member'}
+          </Badge>
+        </div>
       </div>
 
       {/* Profile Completion Alert */}
@@ -259,9 +270,9 @@ const Dashboard = () => {
       {/* Quick Actions */}
       <div>
         <h2 className="text-xl font-semibold mb-4">
-          {isDirector ? 'Director Actions' : 'Quick Actions'}
+          {isDirector ? 'SuperAdmin Actions' : 'Quick Actions'}
         </h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {isDirector ? (
             <>
               <QuickAction
@@ -284,6 +295,20 @@ const Dashboard = () => {
                 icon={Users}
                 onClick={() => window.location.href = '/faculty'}
                 color="bg-blue-500"
+              />
+              <QuickAction
+                title="System Settings"
+                description="Configure system settings and monitor performance"
+                icon={Settings}
+                onClick={() => window.location.href = '/settings'}
+                color="bg-gray-500"
+              />
+              <QuickAction
+                title="Faculty Directory"
+                description="Browse all faculty profiles and information"
+                icon={Activity}
+                onClick={() => window.location.href = '/faculty/directory'}
+                color="bg-green-500"
               />
             </>
           ) : (

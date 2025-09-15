@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, Eye, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { UserPlus, Eye, Users, Edit, Trash2, MoreHorizontal } from 'lucide-react';
 
 interface FacultyAccount {
   id: string;
@@ -31,6 +34,8 @@ interface CreateFacultyForm {
 const FacultyManagement = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [facultyList, setFacultyList] = useState<FacultyAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -77,6 +82,16 @@ const FacultyManagement = () => {
   useEffect(() => {
     fetchFacultyAccounts();
   }, []);
+
+  // Auto-open dialog if coming from Faculty Directory
+  useEffect(() => {
+    const state = location.state as { openCreateDialog?: boolean };
+    if (state?.openCreateDialog) {
+      setCreateDialogOpen(true);
+      // Clear the state to prevent reopening on refresh
+      navigate('/faculty', { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   const generatePassword = () => {
     const length = 12;
@@ -130,6 +145,47 @@ const FacultyManagement = () => {
 
   const resetForm = () => {
     setForm({ email: '', password: '', name: '', department: '' });
+  };
+
+  const handleEditFaculty = (facultyId: string) => {
+    navigate(`/faculty/edit/${facultyId}`);
+  };
+
+  const handleViewProfile = (facultyId: string) => {
+    navigate(`/faculty/directory`);
+  };
+
+  const handleDeleteFaculty = async (facultyId: string, facultyEmail: string) => {
+    if (!confirm(`Are you sure you want to delete the faculty account for ${facultyEmail}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // First, delete the profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', facultyId);
+
+      if (profileError) throw profileError;
+
+      // Note: We cannot delete the auth user directly from the client
+      // This would need to be handled by a server function or admin API
+      toast({
+        title: 'Success',
+        description: 'Faculty profile deleted successfully. Note: The auth account deletion requires server-side processing.',
+      });
+
+      // Refresh the faculty list
+      await fetchFacultyAccounts();
+    } catch (error: any) {
+      console.error('Error deleting faculty:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete faculty account',
+        variant: 'destructive'
+      });
+    }
   };
 
   if (loading) {
@@ -292,6 +348,7 @@ const FacultyManagement = () => {
                   <TableHead>Department</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -311,6 +368,32 @@ const FacultyManagement = () => {
                     </TableCell>
                     <TableCell>
                       {new Date(faculty.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditFaculty(faculty.id)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewProfile(faculty.id)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleDeleteFaculty(faculty.id, faculty.email)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Account
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}

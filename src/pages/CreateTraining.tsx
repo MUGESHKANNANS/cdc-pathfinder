@@ -273,8 +273,8 @@ const CreateTraining = () => {
                     />
                     <Label htmlFor={member.id} className="text-sm font-normal cursor-pointer">
                       <div>
-                        <div className="font-medium">{member.name}</div>
-                        <div className="text-xs text-muted-foreground">{member.department}</div>
+                        <div className="font-medium">{member.name || 'No Name'}</div>
+                        <div className="text-xs text-muted-foreground">{member.email}</div>
                       </div>
                     </Label>
                   </div>
