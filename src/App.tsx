@@ -22,6 +22,10 @@ import CreateTask from "@/pages/CreateTask";
 import Training from "@/pages/Training";
 import CreateTraining from "@/pages/CreateTraining";
 import SystemSettings from "@/pages/SystemSettings";
+import CareerVisualization from "@/pages/CareerVisualization";
+import CareerStudents from "@/pages/CareerStudents";
+import ComingSoon from "@/pages/career/ComingSoon";
+import CareerCompanyAnalysis from "@/pages/CareerCompanyAnalysis";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +45,15 @@ const App = () => (
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
+              <Route path="career-visualization" element={<CareerVisualization />} />
+              <Route path="career-students" element={<CareerStudents />} />
+              <Route path="career/all-analysis" element={<ComingSoon title="Career - All Analysis" />} />
+              <Route path="career/company-analysis" element={<CareerCompanyAnalysis />} />
+              <Route path="career/batch-analysis" element={<ComingSoon title="Career - Batch Analysis" />} />
+              <Route path="career/placement-offer-analysis" element={<ComingSoon title="Career - Placement Offer Analysis" />} />
+              <Route path="career/gender-analysis" element={<ComingSoon title="Career - Gender Analysis" />} />
+              <Route path="career/quota-analysis" element={<ComingSoon title="Career - Quota Analysis" />} />
+              <Route path="career/hostel-day-scholar-analysis" element={<ComingSoon title="Career - Hostel/Day Scholar Analysis" />} />
               <Route path="profile" element={<Profile />} />
               <Route path="profile/edit" element={<EditFacultyProfile />} />
               <Route path="profile/change-password" element={<ChangePassword />} />

@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, Edit, UserX, UserCheck, Search, Filter, Users, UserPlus } from 'lucide-react';
+import { Eye, Edit, UserX, UserCheck, Search, Filter, Users, UserPlus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { DialogFooter } from '@/components/ui/dialog';
 
 interface FacultyProfile {
   id: string;
@@ -43,6 +44,14 @@ const FacultyDirectory = () => {
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyProfile | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+    department: ''
+  });
 
   // Check if current user is CDC Director
   if (!profile || profile.role !== 'cdc_director') {
@@ -80,6 +89,77 @@ const FacultyDirectory = () => {
   useEffect(() => {
     fetchFacultyProfiles();
   }, []);
+
+  const generatePassword = () => {
+    const length = 12;
+    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return password;
+  };
+
+  const handleCreateFaculty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      const { error } = await supabase.functions.invoke('create-faculty-account', {
+        body: {
+          email: form.email,
+          password: form.password,
+          name: form.name,
+          department: form.department
+        }
+      });
+      if (error) throw error;
+      toast({
+        title: 'Success',
+        description: 'Faculty account created successfully',
+      });
+      setForm({ email: '', password: '', name: '', department: '' });
+      setCreateDialogOpen(false);
+      await fetchFacultyProfiles();
+    } catch (error: any) {
+      console.error('Error creating faculty account:', error);
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to create faculty account',
+        variant: 'destructive'
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const resetForm = () => {
+    setForm({ email: '', password: '', name: '', department: '' });
+  };
+
+  const handleDeleteFaculty = async (facultyId: string, facultyEmail: string) => {
+    if (!confirm(`Are you sure you want to delete the faculty profile for ${facultyEmail}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', facultyId);
+      if (error) throw error;
+      toast({
+        title: 'Success',
+        description: 'Faculty profile deleted successfully. Note: Auth user deletion is server-side only.',
+      });
+      await fetchFacultyProfiles();
+    } catch (error: any) {
+      console.error('Error deleting faculty:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete faculty profile',
+        variant: 'destructive'
+      });
+    }
+  };
 
   // Filter faculty based on search and filters
   useEffect(() => {
@@ -164,11 +244,93 @@ const FacultyDirectory = () => {
           <h1 className="text-3xl font-bold text-foreground">Faculty Directory</h1>
           <p className="text-muted-foreground">Search, filter, and manage all faculty profiles</p>
         </div>
-        <Button onClick={() => navigate('/faculty', { state: { openCreateDialog: true } })} variant="outline">
+        <Button onClick={() => setCreateDialogOpen(true)} variant="outline">
           <UserPlus className="mr-2 h-4 w-4" />
           Create Faculty
         </Button>
       </div>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Faculty Account</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateFaculty} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="faculty@kpriet.ac.in"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Dr. John Doe"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="department">Department</Label>
+              <Input
+                id="department"
+                type="text"
+                value={form.department}
+                onChange={(e) => setForm(prev => ({ ...prev, department: e.target.value }))}
+                placeholder="Computer Science & Engineering"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Temporary Password *</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setForm(prev => ({ ...prev, password: generatePassword() }))}
+                >
+                  Generate
+                </Button>
+              </div>
+              <Input
+                id="password"
+                type="text"
+                value={form.password}
+                onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="Enter temporary password"
+                required
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  resetForm();
+                  setCreateDialogOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? 'Creating...' : 'Create Account'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Search and Filters */}
       <Card>
@@ -333,6 +495,13 @@ const FacultyDirectory = () => {
                           ) : (
                             <UserCheck className="h-4 w-4" />
                           )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteFaculty(faculty.id, faculty.email || 'Not Set')}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
                       </div>
                     </TableCell>
