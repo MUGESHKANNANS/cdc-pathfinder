@@ -196,6 +196,83 @@ export type Database = {
         }
         Relationships: []
       }
+      training_assignments: {
+        Row: {
+          assigned_at: string
+          faculty_id: string
+          id: string
+          training_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          faculty_id: string
+          id?: string
+          training_id: string
+        }
+        Update: {
+          assigned_at?: string
+          faculty_id?: string
+          id?: string
+          training_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_assignments_training_id_fkey"
+            columns: ["training_id"]
+            isOneToOne: false
+            referencedRelation: "trainings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trainings: {
+        Row: {
+          batch: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          end_date: string
+          id: string
+          mode: string | null
+          organized_by: string | null
+          progress_notes: string | null
+          start_date: string
+          status: string | null
+          training_name: string
+          updated_at: string
+        }
+        Insert: {
+          batch: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date: string
+          id?: string
+          mode?: string | null
+          organized_by?: string | null
+          progress_notes?: string | null
+          start_date: string
+          status?: string | null
+          training_name: string
+          updated_at?: string
+        }
+        Update: {
+          batch?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          end_date?: string
+          id?: string
+          mode?: string | null
+          organized_by?: string | null
+          progress_notes?: string | null
+          start_date?: string
+          status?: string | null
+          training_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
