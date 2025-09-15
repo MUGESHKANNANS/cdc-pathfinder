@@ -3,14 +3,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Calendar, User, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 
 interface Task {
@@ -31,30 +28,15 @@ interface Task {
   } | null;
 }
 
-interface Faculty {
-  user_id: string;
-  name: string;
-  email: string;
-}
 
 const Tasks = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<'all' | 'assigned' | 'created'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
-
-  const [taskForm, setTaskForm] = useState({
-    title: '',
-    description: '',
-    assigned_to: '',
-    deadline: '',
-    priority: 'medium'
-  });
 
   const fetchTasks = async () => {
     try {
@@ -100,73 +82,12 @@ const Tasks = () => {
     }
   };
 
-  const fetchFaculty = async () => {
-    if (profile?.role === 'cdc_director') {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('user_id, name, email')
-          .eq('role', 'faculty')
-          .order('name');
-
-        if (error) throw error;
-        setFaculty(data || []);
-      } catch (error: any) {
-        console.error('Error fetching faculty:', error);
-      }
-    }
-  };
 
   useEffect(() => {
     if (profile) {
       fetchTasks();
-      fetchFaculty();
     }
   }, [profile]);
-
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
-
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .insert({
-          title: taskForm.title,
-          description: taskForm.description || null,
-          assigned_to: taskForm.assigned_to || null,
-          deadline: taskForm.deadline || null,
-          priority: taskForm.priority,
-          created_by: profile?.user_id
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Success',
-        description: 'Task created successfully'
-      });
-
-      setTaskForm({
-        title: '',
-        description: '',
-        assigned_to: '',
-        deadline: '',
-        priority: 'medium'
-      });
-      setCreateDialogOpen(false);
-      await fetchTasks();
-    } catch (error: any) {
-      console.error('Error creating task:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create task',
-        variant: 'destructive'
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const updateTaskStatus = async (taskId: string, newStatus: string) => {
     try {
@@ -254,95 +175,10 @@ const Tasks = () => {
           <p className="text-muted-foreground">Manage and track tasks and assignments</p>
         </div>
         {profile.role === 'cdc_director' && (
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreateTask} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Task Title *</Label>
-                  <Input
-                    id="title"
-                    value={taskForm.title}
-                    onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="Enter task title"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={taskForm.description}
-                    onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Task description (optional)"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="assigned_to">Assign To</Label>
-                  <Select value={taskForm.assigned_to} onValueChange={(value) => setTaskForm(prev => ({ ...prev, assigned_to: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select faculty member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {faculty.map((member) => (
-                        <SelectItem key={member.user_id} value={member.user_id}>
-                          {member.name || member.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="deadline">Deadline</Label>
-                  <Input
-                    id="deadline"
-                    type="datetime-local"
-                    value={taskForm.deadline}
-                    onChange={(e) => setTaskForm(prev => ({ ...prev, deadline: e.target.value }))}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select value={taskForm.priority} onValueChange={(value) => setTaskForm(prev => ({ ...prev, priority: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCreateDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={creating}>
-                    {creating ? 'Creating...' : 'Create Task'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => navigate('/tasks/create')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Task
+          </Button>
         )}
       </div>
 
@@ -408,7 +244,14 @@ const Tasks = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {task.profiles?.name || 'Unassigned'}
+                      {task.profiles ? (
+                        <div>
+                          <p className="font-medium">{task.profiles.name}</p>
+                          <p className="text-sm text-muted-foreground">{task.profiles.email}</p>
+                        </div>
+                      ) : (
+                        'Unassigned'
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge className={getPriorityColor(task.priority)}>

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ModalProvider } from "@/contexts/ModalContext";
 import LoginPage from "@/components/auth/LoginPage";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Dashboard from "@/pages/Dashboard";
@@ -17,8 +18,10 @@ import ChangePassword from "@/components/auth/ChangePassword";
 import ForgotPassword from "@/components/auth/ForgotPassword";
 import ResetPassword from "@/components/auth/ResetPassword";
 import Tasks from "@/pages/Tasks";
+import CreateTask from "@/pages/CreateTask";
 import Training from "@/pages/Training";
 import CreateTraining from "@/pages/CreateTraining";
+import SystemSettings from "@/pages/SystemSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,9 +30,10 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AuthProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+        <ModalProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -43,16 +47,19 @@ const App = () => (
               <Route path="events" element={<Events />} />
               <Route path="events/create" element={<CreateEvent />} />
               <Route path="tasks" element={<Tasks />} />
+              <Route path="tasks/create" element={<CreateTask />} />
               <Route path="training" element={<Training />} />
               <Route path="training/create" element={<CreateTraining />} />
               <Route path="placements" element={<div className="p-8 text-center text-muted-foreground">Placements module coming soon...</div>} />
               <Route path="faculty" element={<FacultyManagement />} />
               <Route path="faculty/directory" element={<FacultyDirectory />} />
               <Route path="faculty/edit/:facultyId" element={<EditFacultyProfile />} />
+              <Route path="settings" element={<SystemSettings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
+          </BrowserRouter>
+        </ModalProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

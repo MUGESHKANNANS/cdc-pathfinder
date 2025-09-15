@@ -11,7 +11,10 @@ import {
   GraduationCap, 
   Building2,
   Users,
-  Plus
+  Plus,
+  Settings,
+  Shield,
+  UserCheck
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -31,9 +34,11 @@ const Sidebar = () => {
 
   const directorActions = [
     { name: 'Manage Faculty', href: '/faculty', icon: Users },
-    { name: 'Faculty Directory', href: '/faculty/directory', icon: Users },
+    { name: 'Faculty Directory', href: '/faculty/directory', icon: UserCheck },
     { name: 'Create Event', href: '/events/create', icon: Plus },
     { name: 'Create Task', href: '/tasks/create', icon: Plus },
+    { name: 'Create Training', href: '/training/create', icon: Plus },
+    { name: 'System Settings', href: '/settings', icon: Settings },
   ];
 
   return (
@@ -44,10 +49,16 @@ const Sidebar = () => {
           <div className="bg-pink-600 rounded-lg p-2">
             <GraduationCap className="h-6 w-6 text-white" />
           </div>
-          <div>
-            <h2 className="font-bold text-gray-900">CDC Portal</h2>
-            <p className="text-xs text-gray-500">KPRIET</p>
-          </div>
+            <div>
+              <h2 className="font-bold text-gray-900">CDC Portal</h2>
+              <p className="text-xs text-gray-500">KPRIET</p>
+              {isDirector && (
+                <div className="flex items-center mt-1">
+                  <Shield className="h-3 w-3 text-pink-600 mr-1" />
+                  <span className="text-xs text-pink-600 font-medium">SuperAdmin</span>
+                </div>
+              )}
+            </div>
         </div>
       </div>
 
@@ -77,7 +88,7 @@ const Sidebar = () => {
           <>
             <div className="pt-4 mt-4 border-t border-gray-200">
               <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Director Actions
+                SuperAdmin Actions
               </p>
               {directorActions.map((item) => {
                 const isActive = location.pathname === item.href;
