@@ -344,20 +344,24 @@ const FacultyDirectory = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div className="space-y-2">
-              <Label>Search by Name or Email</Label>
-              <Input
-                placeholder="Search faculty..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full"
-              />
+              <Label className="text-left">Search by Name or Email</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search faculty..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 h-10 border border-indigo-300"
+                />
+              </div>
             </div>
 
             {/* Department Filter */}
             <div className="space-y-2">
-              <Label>Filter by Department</Label>
+              <Label className="text-left">Filter by Department</Label>
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-10 border border-indigo-300">
+                  <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="All Departments" />
                 </SelectTrigger>
                 <SelectContent>
@@ -371,9 +375,10 @@ const FacultyDirectory = () => {
 
             {/* Status Filter */}
             <div className="space-y-2">
-              <Label>Filter by Status</Label>
+              <Label className="text-left">Filter by Status</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-10 border border-indigo-300">
+                  <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>

@@ -181,19 +181,19 @@ const Training = () => {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 items-center flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+      {/* Filters (inline) */}
+      <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+        <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search training programs..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 h-12 rounded-xl border border-indigo-300"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[220px] h-12 rounded-xl border border-indigo-300">
             <Filter className="h-4 w-4 mr-2" />
             <SelectValue />
           </SelectTrigger>
@@ -205,7 +205,8 @@ const Training = () => {
           </SelectContent>
         </Select>
         <Select value={batchFilter} onValueChange={setBatchFilter}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[220px] h-12 rounded-xl border border-indigo-300">
+            <Filter className="h-4 w-4 mr-2" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

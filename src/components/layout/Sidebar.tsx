@@ -102,15 +102,15 @@ const Sidebar = () => {
             Career
           </p>
           <NavLink
-            to={'/career-visualization'}
+            to={'/career/main-dashboard'}
             className={cn(
               'relative flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-              location.pathname === '/career-visualization'
+              location.pathname === '/career/main-dashboard'
                 ? 'bg-pink-50 text-pink-700 before:absolute before:left-0 before:top-1 before:bottom-1 before:w-1 before:rounded-r-md before:bg-pink-500'
                 : 'text-gray-900 hover:bg-pink-50 hover:text-pink-700'
             )}
           >
-            <BarChart3 className={cn('h-5 w-5', location.pathname === '/career-visualization' ? 'text-pink-700' : 'text-gray-600')} />
+            <BarChart3 className={cn('h-5 w-5', location.pathname === '/career/main-dashboard' ? 'text-pink-700' : 'text-gray-600')} />
             <span>All Charts</span>
           </NavLink>
           {careerLinks.map((item) => {

@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Calendar, User, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, Calendar, User, AlertCircle, CheckCircle2, Clock, Filter } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -37,6 +38,7 @@ const Tasks = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'assigned' | 'created'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchTasks = async () => {
     try {
@@ -115,6 +117,10 @@ const Tasks = () => {
   };
 
   const filteredTasks = tasks.filter(task => {
+    const matchesSearch = searchTerm
+      ? (task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         (task.description || '').toLowerCase().includes(searchTerm.toLowerCase()))
+      : true;
     // Status filter
     if (statusFilter !== 'all' && task.status !== statusFilter) {
       return false;
@@ -127,7 +133,7 @@ const Tasks = () => {
       return task.created_by === profile?.user_id;
     }
 
-    return true;
+    return matchesSearch;
   });
 
   const getPriorityColor = (priority: string) => {
@@ -182,32 +188,43 @@ const Tasks = () => {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 flex-wrap">
-        <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Tasks</SelectItem>
-            <SelectItem value="assigned">Assigned to Me</SelectItem>
-            {profile.role === 'cdc_director' && (
-              <SelectItem value="created">Created by Me</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-
-        <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Filters (inline) */}
+      <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap w-full">
+        <Input
+          placeholder="Search tasks..."
+          value={searchTerm}
+          onChange={(e)=>setSearchTerm(e.target.value)}
+          className="flex-[3] min-w-[220px] h-12 rounded-xl border border-indigo-300"
+        />
+        <div className="flex-1 min-w-[160px]">
+          <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
+            <SelectTrigger className="h-12 rounded-xl w-full border border-indigo-300">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tasks</SelectItem>
+              <SelectItem value="assigned">Assigned to Me</SelectItem>
+              {profile.role === 'cdc_director' && (
+                <SelectItem value="created">Created by Me</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
+            <SelectTrigger className="h-12 rounded-xl w-full border border-indigo-300">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Tasks Table */}

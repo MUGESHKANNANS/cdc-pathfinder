@@ -26,6 +26,12 @@ import CareerVisualization from "@/pages/CareerVisualization";
 import CareerStudents from "@/pages/CareerStudents";
 import ComingSoon from "@/pages/career/ComingSoon";
 import CareerCompanyAnalysis from "@/pages/CareerCompanyAnalysis";
+import CareerPlacementOffer from "@/pages/CareerPlacementOffer";
+import CareerAllAnalysis from "@/pages/CareerAllAnalysis";
+import CareerGenderAnalysis from "@/pages/CareerGenderAnalysis";
+import CareerQuotaAnalysis from "@/pages/CareerQuotaAnalysis";
+import CareerMainDashboard from "@/pages/CareerMainDashboard";
+import CareerHostelDayScholarAnalysis from "@/pages/CareerHostelDayScholarAnalysis";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,15 +51,16 @@ const App = () => (
             <Route path="/" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
-              <Route path="career-visualization" element={<CareerVisualization />} />
+              <Route path="career/main-dashboard" element={<CareerMainDashboard />} />
+              <Route path="career/visualization" element={<CareerVisualization />} />
               <Route path="career-students" element={<CareerStudents />} />
-              <Route path="career/all-analysis" element={<ComingSoon title="Career - All Analysis" />} />
+              <Route path="career/all-analysis" element={<CareerAllAnalysis />} />
               <Route path="career/company-analysis" element={<CareerCompanyAnalysis />} />
+              <Route path="career/placement-offer-analysis" element={<CareerPlacementOffer />} />
               <Route path="career/batch-analysis" element={<ComingSoon title="Career - Batch Analysis" />} />
-              <Route path="career/placement-offer-analysis" element={<ComingSoon title="Career - Placement Offer Analysis" />} />
-              <Route path="career/gender-analysis" element={<ComingSoon title="Career - Gender Analysis" />} />
-              <Route path="career/quota-analysis" element={<ComingSoon title="Career - Quota Analysis" />} />
-              <Route path="career/hostel-day-scholar-analysis" element={<ComingSoon title="Career - Hostel/Day Scholar Analysis" />} />
+              <Route path="career/gender-analysis" element={<CareerGenderAnalysis />} />
+              <Route path="career/quota-analysis" element={<CareerQuotaAnalysis />} />
+              <Route path="career/hostel-day-scholar-analysis" element={<CareerHostelDayScholarAnalysis />} />
               <Route path="profile" element={<Profile />} />
               <Route path="profile/edit" element={<EditFacultyProfile />} />
               <Route path="profile/change-password" element={<ChangePassword />} />
