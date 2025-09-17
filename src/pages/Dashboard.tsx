@@ -121,7 +121,7 @@ const Dashboard = () => {
     color: string;
     description?: string;
   }) => (
-    <Card className="transition-all duration-200 hover:shadow-md">
+    <Card className="transition-all duration-200 hover:shadow-md h-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className={`h-4 w-4 ${color}`} />
@@ -142,7 +142,7 @@ const Dashboard = () => {
     onClick: () => void;
     color: string;
   }) => (
-    <Card className="cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02]" onClick={onClick}>
+    <Card className="cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] h-full" onClick={onClick}>
       <CardHeader>
         <div className="flex items-center space-x-3">
           <div className={`p-2 rounded-lg ${color}`}>
@@ -201,7 +201,7 @@ const Dashboard = () => {
       )}
 
       {/* Stats Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 items-stretch">
         {isDirector ? (
           <>
             <StatCard 
@@ -272,7 +272,7 @@ const Dashboard = () => {
         <h2 className="text-xl font-semibold mb-4">
           {isDirector ? 'SuperAdmin Actions' : 'Quick Actions'}
         </h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-stretch">
           {isDirector ? (
             <>
               <QuickAction

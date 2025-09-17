@@ -393,8 +393,8 @@ const FacultyDirectory = () => {
       </Card>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Faculty</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -403,7 +403,7 @@ const FacultyDirectory = () => {
             <div className="text-2xl font-bold">{facultyList.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
             <UserCheck className="h-4 w-4 text-green-600" />
@@ -414,7 +414,7 @@ const FacultyDirectory = () => {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Inactive</CardTitle>
             <UserX className="h-4 w-4 text-red-600" />

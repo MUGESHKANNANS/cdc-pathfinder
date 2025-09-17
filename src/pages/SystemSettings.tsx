@@ -170,8 +170,8 @@ const SystemSettings = () => {
       </div>
 
       {/* System Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -184,7 +184,7 @@ const SystemSettings = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Events</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
@@ -195,7 +195,7 @@ const SystemSettings = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Tasks</CardTitle>
             <Server className="h-4 w-4 text-muted-foreground" />
@@ -219,9 +219,9 @@ const SystemSettings = () => {
       </div>
 
       {/* System Configuration */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* System Maintenance */}
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <CardTitle className="flex items-center">
               <Server className="mr-2 h-5 w-5" />
@@ -255,7 +255,7 @@ const SystemSettings = () => {
         </Card>
 
         {/* Security Settings */}
-        <Card>
+        <Card className="h-full">
           <CardHeader>
             <CardTitle className="flex items-center">
               <Shield className="mr-2 h-5 w-5" />

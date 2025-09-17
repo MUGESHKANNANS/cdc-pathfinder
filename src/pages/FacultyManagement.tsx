@@ -294,8 +294,8 @@ const FacultyManagement = () => {
       </div>
 
       {/* Stats Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Faculty</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -304,7 +304,7 @@ const FacultyManagement = () => {
             <div className="text-2xl font-bold">{facultyList.length}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Profiles Completed</CardTitle>
             <Eye className="h-4 w-4 text-muted-foreground" />
@@ -315,7 +315,7 @@ const FacultyManagement = () => {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Setup</CardTitle>
             <UserPlus className="h-4 w-4 text-muted-foreground" />

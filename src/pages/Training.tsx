@@ -221,18 +221,22 @@ const Training = () => {
       {/* Training Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredTrainings.map((training) => (
-          <Card key={training.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
+          <Card key={training.id} className="relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-0.5">
+            <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50 via-transparent to-pink-50" />
+            <CardHeader className="relative">
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-lg">{training.training_name}</CardTitle>
-                  <CardDescription className="text-sm">Batch: {training.batch}</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {training.training_name}
+                    <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-[11px]">{training.batch}</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1">Organized by {training.organized_by}</CardDescription>
                 </div>
                 {getStatusBadge(training.status)}
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground line-clamp-2">
+            <CardContent className="relative space-y-4">
+              <p className="text-sm text-muted-foreground line-clamp-3">
                 {training.description}
               </p>
               
@@ -247,10 +251,6 @@ const Training = () => {
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <span>{training.mode}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-muted-foreground" />
-                  <span>{training.organized_by}</span>
-                </div>
                 {training.faculty_names && training.faculty_names.length > 0 && (
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
@@ -262,7 +262,7 @@ const Training = () => {
               </div>
 
               {training.progress_notes && (
-                <div className="p-3 bg-muted rounded-md">
+                <div className="p-3 bg-muted/60 rounded-md">
                   <p className="text-xs font-medium text-muted-foreground mb-1">Progress Notes:</p>
                   <p className="text-sm">{training.progress_notes}</p>
                 </div>
@@ -305,6 +305,7 @@ const Training = () => {
                   </Button>
                 </div>
               )}
+              <div className="pt-2 border-t text-xs text-muted-foreground">Created: {format(new Date(training.created_at), 'PP')}</div>
             </CardContent>
           </Card>
         ))}
