@@ -32,6 +32,23 @@ const OPTIONAL_COLUMNS = ['Batch','Incharge','Package'];
 
 const TEMPLATE_HEADERS = [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS];
 
+// Columns to display in the data table and exports as requested
+const DISPLAY_COLUMNS = [
+  'S.No',
+  'Dept',
+  'Batch',
+  'PI',
+  'Quota',
+  'Total',
+  'Total MQ',
+  'Total GQ',
+  'Total International',
+  'Placed MQ',
+  'Placed GQ',
+  'Placed International',
+  'Total %'
+];
+
 const normalize = (s: string) => s?.trim().replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
 const toNumber = (v: any): number => {
   const n = Number(String(v).toString().replace(/[^0-9.\-]/g, ''));
@@ -255,7 +272,12 @@ const CareerQuotaAnalysis: React.FC = () => {
   }, [filteredRows]);
 
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredRows);
+    const trimmed = filteredRows.map(row => {
+      const obj: Record<string, any> = {};
+      DISPLAY_COLUMNS.forEach(h => { obj[h] = row[h] ?? ''; });
+      return obj;
+    });
+    const ws = XLSX.utils.json_to_sheet(trimmed);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Filtered');
     XLSX.writeFile(wb, 'career_quota_analysis_filtered.xlsx');
@@ -266,11 +288,11 @@ const CareerQuotaAnalysis: React.FC = () => {
     doc.text('Career - Quota Analysis (Filtered)', 14, 22);
     
     const tableData = filteredRows.map(row => 
-      [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS].map(header => row[header] || '')
+      DISPLAY_COLUMNS.map(header => row[header] || '')
     );
     
     doc.autoTable({
-      head: [[...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS]],
+      head: [[...DISPLAY_COLUMNS]],
       body: tableData,
       startY: 30,
     });
@@ -480,11 +502,11 @@ const CareerQuotaAnalysis: React.FC = () => {
                 <CardTitle>Quota Analysis Data</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="max-w-full overflow-x-auto">
-                  <table className="min-w-[1200px] border-collapse">
+                <div className="w-full overflow-x-auto">
+                  <table className="min-w-full border-collapse table-fixed">
                     <thead>
                       <tr className="border-b">
-                        {[...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS].map((h) => (
+                        {DISPLAY_COLUMNS.map((h) => (
                           <th key={h} className="text-left p-2 font-medium">{h}</th>
                         ))}
                       </tr>
@@ -492,7 +514,7 @@ const CareerQuotaAnalysis: React.FC = () => {
                     <tbody>
                       {paginatedRows.map((r, idx) => (
                         <tr key={idx} className="border-b hover:bg-muted/50">
-                          {[...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS].map((h) => (
+                          {DISPLAY_COLUMNS.map((h) => (
                             <td key={h} className="p-2 text-sm">
                               {String(r[h] ?? '')}
                             </td>
