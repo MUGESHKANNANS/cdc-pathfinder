@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Tooltip, ResponsiveContainer, ScatterChart, Scatter, ZAxis, ComposedChart, AreaChart, Area } from 'recharts';
 import jsPDF from 'jspdf';
 import { Search, Filter, Download, Upload, FileSpreadsheet, BarChart3, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,10 @@ const TEMPLATE_HEADERS = [
 ];
 
 const normalize = (s: string) => s?.trim().replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
+const toNumber = (v: any): number => {
+  const n = Number(String(v ?? '').toString().replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
 
 interface RowData { [key: string]: any }
 
@@ -146,6 +150,126 @@ const CareerStudents: React.FC = () => {
   // Pagination
   const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
   const paginatedRows = filteredRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Metrics for extended visualizations
+  const metrics = useMemo(() => {
+    const placed = (r: any) => String(r['Placed or Non Placed'] || '').toLowerCase().includes('placed');
+
+    const cgpaVsSalary = filteredRows.map((r, idx) => ({ x: toNumber(r['CGPA']), y: toNumber(r['Maximum Salary']), name: String(r['Name'] || ''), idx }));
+
+    const marksVsPlaced = ['10th','12th'].map(key => ({
+      key,
+      placed: filteredRows.filter(r => placed(r)).reduce((s,r)=>s + toNumber(r[key]), 0),
+      not: filteredRows.filter(r => !placed(r)).reduce((s,r)=>s + toNumber(r[key]), 0)
+    }));
+
+    const cutoffVsCompanies = filteredRows
+      .map(r => ({ cutoff: toNumber(r['CutOff']), companies: toNumber(r['Number Of Company Placed']) }))
+      .sort((a,b)=>a.cutoff-b.cutoff);
+
+    const companyKeys = Array.from({ length: 10 }, (_, i) => `Company ${i+1}`);
+    const salaryKeys = Array.from({ length: 10 }, (_, i) => `Salary (Company ${i+1})`);
+    const organizedKeys = Array.from({ length: 10 }, (_, i) => `Organized By (Company ${i+1})`);
+
+    const companyCountMap = new Map<string, number>();
+    const companySalaryMap = new Map<string, number[]>();
+    const organizedByMap = new Map<string, number>();
+    const studentOfferHistogram = new Map<number, number>();
+
+    filteredRows.forEach(r => {
+      // offers
+      const offers = toNumber(r['Number Of Company Placed']);
+      studentOfferHistogram.set(offers, (studentOfferHistogram.get(offers)||0) + 1);
+      for (let i=0;i<companyKeys.length;i++) {
+        const cname = String(r[companyKeys[i]] || '').trim();
+        const spkg = toNumber(r[salaryKeys[i]]);
+        const org = String(r[organizedKeys[i]] || '').trim();
+        if (!cname) continue;
+        companyCountMap.set(cname, (companyCountMap.get(cname)||0) + 1);
+        if (Number.isFinite(spkg) && spkg>0) {
+          const arr = companySalaryMap.get(cname) || []; arr.push(spkg); companySalaryMap.set(cname, arr);
+        }
+        if (org) organizedByMap.set(org, (organizedByMap.get(org)||0) + 1);
+      }
+    });
+
+    const companyCount = Array.from(companyCountMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([company, count])=>({ company, count }));
+    const topCompaniesByAvg = Array.from(companySalaryMap.entries())
+      .map(([company, arr]) => ({ company, avg: arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0 }))
+      .sort((a,b)=>b.avg-a.avg).slice(0,5);
+
+    const companySalaryDist = Array.from(companySalaryMap.entries()).map(([company, arr]) => ({ company, max: Math.max(...arr), min: Math.min(...arr), avg: Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) }));
+
+    const offersHistogram = Array.from(studentOfferHistogram.entries()).sort((a,b)=>a[0]-b[0]).map(([offers, count])=>({ offers, count }));
+
+    const placedDonut = [
+      { name: 'Placed', value: filteredRows.filter(placed).length },
+      { name: 'Not Placed', value: filteredRows.length - filteredRows.filter(placed).length }
+    ];
+
+    const singleVsMulti = [
+      { name: 'Single Offer', value: filteredRows.filter(r => toNumber(r['Number Of Company Placed']) === 1).length },
+      { name: 'Multiple Offers', value: filteredRows.filter(r => toNumber(r['Number Of Company Placed']) > 1).length }
+    ];
+
+    const deptPct = Array.from(new Set(filteredRows.map(r=>String(r['Dept'])))).map(dept => {
+      const list = filteredRows.filter(r=>String(r['Dept'])===dept);
+      const p = list.filter(placed).length;
+      return { dept, pct: list.length ? Math.round((p/list.length)*100) : 0 };
+    });
+
+    const sectionCompare = Array.from(new Set(filteredRows.map(r=>String(r['Section']||'NA')))).map(section => {
+      const list = filteredRows.filter(r=>String(r['Section']||'NA')===section);
+      return { section, placed: list.filter(placed).length, total: list.length };
+    });
+
+    const batchPct = Array.from(new Set(filteredRows.map(r=>String(r['Training Batch']||'NA')))).map(batch => {
+      const list = filteredRows.filter(r=>String(r['Training Batch']||'NA')===batch);
+      const p = list.filter(placed).length;
+      return { batch, pct: list.length ? Math.round((p/list.length)*100) : 0 };
+    });
+
+    const genderRatio = Array.from(new Set(filteredRows.map(r=>String(r['Gender']||'NA')))).map(gender => ({ gender, value: filteredRows.filter(r=>String(r['Gender']||'NA')===gender && placed(r)).length }));
+    const quotaDonut = ['MQ','GQ','International'].map(q => ({ name: q, value: filteredRows.filter(r=>String(r['Quota']||'').toUpperCase()===q && placed(r)).length }));
+    const quotaVsMax = Array.from(new Set(filteredRows.map(r=>String(r['Quota']||'NA')))).map(q => ({ quota: q, max: Math.max(...filteredRows.filter(r=>String(r['Quota']||'NA')===q).map(r=>toNumber(r['Maximum Salary'])||0)) || 0 }));
+
+    const hostelPct = Array.from(new Set(filteredRows.map(r=>String(r['Hosteller / Days scholar']||'NA')))).map(type => {
+      const list = filteredRows.filter(r=>String(r['Hosteller / Days scholar']||'NA')===type);
+      const p = list.filter(placed).length; return { type, pct: list.length ? Math.round((p/list.length)*100) : 0 };
+    });
+    const hostelAvg = Array.from(new Set(filteredRows.map(r=>String(r['Hosteller / Days scholar']||'NA')))).map(type => {
+      const list = filteredRows.filter(r=>String(r['Hosteller / Days scholar']||'NA')===type);
+      const pkgs = list.map(r=>toNumber(r['Maximum Salary'])).filter(v=>v>0);
+      const avg = pkgs.length ? Math.round(pkgs.reduce((a,b)=>a+b,0)/pkgs.length) : 0;
+      return { type, avg };
+    });
+
+    const maxSalaryByDept = Array.from(new Set(filteredRows.map(r=>String(r['Dept'])))).map(dept => ({ dept, max: Math.max(...filteredRows.filter(r=>String(r['Dept'])===dept).map(r=>toNumber(r['Maximum Salary'])||0)) || 0 }));
+    const avgSalaryBySection = Array.from(new Set(filteredRows.map(r=>String(r['Section']||'NA')))).map(section => {
+      const list = filteredRows.filter(r=>String(r['Section']||'NA')===section);
+      const pkgs = list.map(r=>toNumber(r['Maximum Salary'])).filter(v=>v>0);
+      const avg = pkgs.length ? Math.round(pkgs.reduce((a,b)=>a+b,0)/pkgs.length) : 0;
+      return { section, avg };
+    });
+
+    // Salary range histogram buckets of size 2 (LPA)
+    const salaryBuckets = new Map<string, number>();
+    filteredRows.forEach(r => { const s = toNumber(r['Maximum Salary']); if (!Number.isFinite(s) || s<=0) return; const start = Math.floor(s/2)*2; const key = `${start}-${start+2}`; salaryBuckets.set(key, (salaryBuckets.get(key)||0)+1); });
+    const salaryHistogram = Array.from(salaryBuckets.entries()).sort((a,b)=>Number(a[0].split('-')[0])-Number(b[0].split('-')[0])).map(([range,count])=>({ range, count }));
+
+    const top10Students = [...filteredRows]
+      .map(r => ({ name: String(r['Name']||'NA'), dept: String(r['Dept']||'NA'), pkg: toNumber(r['Maximum Salary']) }))
+      .sort((a,b)=>b.pkg-a.pkg)
+      .slice(0,10);
+
+    const placedThresholds = [2,3,5].map(t => ({ threshold: `${t}+`, count: filteredRows.filter(r => toNumber(r['Number Of Company Placed']) >= t).length }));
+
+    const companyVsHighest = Array.from(companySalaryMap.entries()).slice(0,20).map(([company, arr]) => ({ x: company, y: Math.max(...arr), z: arr.length }));
+
+    const organizedTrend = Array.from(organizedByMap.entries()).map(([org, count])=>({ org, count }));
+
+    return { cgpaVsSalary, marksVsPlaced, cutoffVsCompanies, companyCount, companySalaryDist, topCompaniesByAvg, offersHistogram, placedDonut, singleVsMulti, deptPct, sectionCompare, batchPct, genderRatio, quotaDonut, quotaVsMax, hostelPct, hostelAvg, maxSalaryByDept, avgSalaryBySection, salaryHistogram, top10Students, placedThresholds, companyVsHighest, organizedTrend };
+  }, [filteredRows]);
 
   // Export functions
   const exportToExcel = () => {
@@ -414,56 +538,362 @@ const CareerStudents: React.FC = () => {
           <TabsContent value="visualizations" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>Placement Overview</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Placed vs Non-Placed</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-primary mb-2">
-                      {filteredRows.length > 0 ? 
-                        Math.round((filteredRows.filter(r => String(r['Placed or Non Placed'] || '').toLowerCase().includes('placed')).length / filteredRows.length) * 100) : 0}%
-                    </div>
-                    <p className="text-muted-foreground">Overall Placement Rate</p>
-                    <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="font-semibold">Total Students</div>
-                        <div>{filteredRows.length}</div>
-                      </div>
-                      <div>
-                        <div className="font-semibold">Placed Students</div>
-                        <div>{filteredRows.filter(r => String(r['Placed or Non Placed'] || '').toLowerCase().includes('placed')).length}</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Department Distribution</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
-                      <Pie
-                        data={deptOptions.map(dept => ({
-                          name: dept,
-                          value: filteredRows.filter(r => r.Dept === dept).length
-                        }))}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        dataKey="value"
-                      >
-                        {deptOptions.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
+                      <Pie dataKey="value" data={metrics.placedDonut} cx="50%" cy="50%" innerRadius={60} outerRadius={100} label>
+                        {metrics.placedDonut.map((_, idx) => (<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
                       </Pie>
                       <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
+
+              <Card>
+                <CardHeader><CardTitle>CGPA vs Maximum Salary</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ScatterChart>
+                      <CartesianGrid />
+                      <XAxis dataKey="x" name="CGPA" />
+                      <YAxis dataKey="y" name="Salary" />
+                      <Tooltip />
+                      <Scatter data={metrics.cgpaVsSalary} fill="#3b82f6" />
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>10th & 12th Marks vs Placement</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metrics.marksVsPlaced}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="key" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="placed" stackId="a" fill="#10b981" />
+                      <Bar dataKey="not" stackId="a" fill="#ef4444" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Cutoff vs Companies Placed</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={metrics.cutoffVsCompanies}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="cutoff" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="companies" stroke="#3b82f6" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Company-wise Student Count</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metrics.companyCount}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="company" interval={0} angle={-25} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#8b5cf6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Top 5 Companies by Avg Salary</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.topCompaniesByAvg}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="company" interval={0} angle={-25} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="avg" fill="#f59e0b" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Offers per Student (Histogram)</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.offersHistogram}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="offers" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#06b6d4" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Organized By (Drive Split)</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie dataKey="count" data={metrics.organizedTrend} cx="50%" cy="50%" outerRadius={100} label>
+                        {metrics.organizedTrend.map((_, idx) => (<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Single vs Multiple Offers</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie dataKey="value" data={metrics.singleVsMulti} cx="50%" cy="50%" outerRadius={100} label>
+                        {metrics.singleVsMulti.map((_, idx) => (<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Dept-wise Placement %</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metrics.deptPct}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="dept" interval={0} angle={-25} textAnchor="end" height={60} />
+                      <YAxis domain={[0,100]} />
+                      <Tooltip />
+                      <Bar dataKey="pct" fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Section-wise Placement</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <ComposedChart data={metrics.sectionCompare}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="section" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="placed" fill="#3b82f6" />
+                      <Line type="monotone" dataKey="total" stroke="#94a3b8" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Training Batch vs Placement %</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={metrics.batchPct}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="batch" />
+                      <YAxis domain={[0,100]} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="pct" stroke="#ef4444" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Gender-wise Placement Ratio</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie dataKey="value" data={metrics.genderRatio} cx="50%" cy="50%" outerRadius={100} label>
+                        {metrics.genderRatio.map((_, idx) => (<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Quota-based Placement</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie dataKey="value" data={metrics.quotaDonut} cx="50%" cy="50%" outerRadius={100} label>
+                        {metrics.quotaDonut.map((_, idx) => (<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Quota vs Maximum Salary</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.quotaVsMax}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="quota" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="max" fill="#f59e0b" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Hosteller vs Day Scholar Placement %</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.hostelPct}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="type" />
+                      <YAxis domain={[0,100]} />
+                      <Tooltip />
+                      <Bar dataKey="pct" fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Hosteller vs Day Scholar Avg Package</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.hostelAvg}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="type" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="avg" fill="#3b82f6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Maximum Salary by Dept</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metrics.maxSalaryByDept}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="dept" interval={0} angle={-25} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="max" fill="#ef4444" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Average Salary by Section</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.avgSalaryBySection}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="section" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="avg" fill="#8b5cf6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Salary Range Distribution</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.salaryHistogram}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="range" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#06b6d4" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Top 10 Students by Salary</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metrics.top10Students}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" interval={0} angle={-25} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="pkg" fill="#f59e0b" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Students Placed in 2+, 3+, 5+</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={metrics.placedThresholds}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="threshold" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Company Joined vs Highest Package</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ScatterChart>
+                      <CartesianGrid />
+                      <XAxis dataKey="x" name="Company" interval={0} />
+                      <YAxis dataKey="y" name="Highest Package" />
+                      <Tooltip />
+                      <Scatter data={metrics.companyVsHighest} fill="#ef4444" />
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle>Placement Drive Success (Organized By)</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={metrics.organizedTrend}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="org" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="count" stroke="#3b82f6" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
             </div>
           </TabsContent>
         </Tabs>
