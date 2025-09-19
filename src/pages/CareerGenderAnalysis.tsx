@@ -5,12 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import jsPDF from 'jspdf';
-import { Search, Filter } from 'lucide-react';
+import 'jspdf-autotable';
+import { Search, Filter, Download, Upload, FileSpreadsheet, BarChart3, TrendingUp } from 'lucide-react';
 
 type RowData = { [key: string]: any };
 
@@ -40,6 +43,10 @@ const CareerGenderAnalysis: React.FC = () => {
   const [pi, setPi] = useState<string>('all');
   const [gender, setGender] = useState<string>('all');
   const [placed, setPlaced] = useState<string>('all'); // all | placed | not
+  const [packageMin, setPackageMin] = useState('');
+  const [packageMax, setPackageMax] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50);
 
   if (!profile || (profile.role !== 'cdc_director' && profile.role !== 'faculty')) {
     return (
@@ -88,13 +95,14 @@ const CareerGenderAnalysis: React.FC = () => {
         return;
       }
       setRows(data);
+      setCurrentPage(1);
       toast({ title: 'Upload successful', description: `${data.length} records loaded` });
     } catch (e: any) {
       toast({ title: 'Parse error', description: e.message || 'Failed to parse file', variant: 'destructive' });
     }
   };
 
-  const filtered = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const searchLower = search.toLowerCase();
     return rows.filter(r => {
       const matchesSearch = search ? Object.values(r).some(v => String(v).toLowerCase().includes(searchLower)) : true;
@@ -104,18 +112,29 @@ const CareerGenderAnalysis: React.FC = () => {
       const matchesGender = gender === 'all' ? true : String(r['Gender']).toLowerCase() === gender.toLowerCase();
       const placedCount = toNumber(r['Placed Male']) + toNumber(r['Placed Female']);
       const matchesPlaced = placed === 'all' ? true : placed === 'placed' ? placedCount > 0 : placedCount === 0;
-      return matchesSearch && matchesDept && matchesBatch && matchesPi && matchesGender && matchesPlaced;
+      
+      const packageValue = toNumber(r['Package']);
+      const matchesPackageMin = !packageMin || packageValue >= toNumber(packageMin);
+      const matchesPackageMax = !packageMax || packageValue <= toNumber(packageMax);
+      
+      return matchesSearch && matchesDept && matchesBatch && matchesPi && matchesGender && matchesPlaced && matchesPackageMin && matchesPackageMax;
     });
-  }, [rows, search, dept, batch, pi, gender, placed]);
+  }, [rows, search, dept, batch, pi, gender, placed, packageMin, packageMax]);
 
   const departments = useMemo(() => Array.from(new Set(rows.map(r => r['Dept']).filter(Boolean))) as string[], [rows]);
   const batches = useMemo(() => Array.from(new Set(rows.map(r => r['Batch']).filter(Boolean))) as string[], [rows]);
   const pis = useMemo(() => Array.from(new Set(rows.map(r => r['PI']).filter(Boolean))) as string[], [rows]);
 
+  const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+  const paginatedRows = filteredRows.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   const metrics = useMemo(() => {
     // Dept aggregates
     const deptMap = new Map<string, { male: number; female: number; placedMale: number; placedFemale: number; malePct: number; femalePct: number; totalPlaced: number; total: number; pkgMale: number[]; pkgFemale: number[] }>();
-    filtered.forEach(r => {
+    filteredRows.forEach(r => {
       const d = String(r['Dept'] || 'NA');
       const cur = deptMap.get(d) || { male: 0, female: 0, placedMale: 0, placedFemale: 0, malePct: 0, femalePct: 0, totalPlaced: 0, total: 0, pkgMale: [], pkgFemale: [] };
       cur.male += toNumber(r['Total Male']);
@@ -146,39 +165,46 @@ const CareerGenderAnalysis: React.FC = () => {
 
     // PI-wise
     const piMap = new Map<string, { male: number; female: number }>();
-    filtered.forEach(r => { const p = String(r['PI'] || 'NA'); const cur = piMap.get(p) || { male: 0, female: 0 }; cur.male += toNumber(r['Total Male']); cur.female += toNumber(r['Total Female']); piMap.set(p, cur); });
+    filteredRows.forEach(r => { const p = String(r['PI'] || 'NA'); const cur = piMap.get(p) || { male: 0, female: 0 }; cur.male += toNumber(r['Total Male']); cur.female += toNumber(r['Total Female']); piMap.set(p, cur); });
     const piStrength = Array.from(piMap.entries()).map(([pi, v]) => ({ pi, male: v.male, female: v.female }));
 
-    // Batch-wise distribution and growth trend by gender
-    const batchMap = new Map<string, { male: number; female: number; placedMale: number; placedFemale: number }>();
-    filtered.forEach(r => { const b = String(r['Batch'] || 'NA'); const cur = batchMap.get(b) || { male: 0, female: 0, placedMale: 0, placedFemale: 0 }; cur.male += toNumber(r['Total Male']); cur.female += toNumber(r['Total Female']); cur.placedMale += toNumber(r['Placed Male']); cur.placedFemale += toNumber(r['Placed Female']); batchMap.set(b, cur); });
+    // Batch-wise
+    const batchMap = new Map<string, { male: number; female: number }>();
+    filteredRows.forEach(r => { const b = String(r['Batch'] || 'NA'); const cur = batchMap.get(b) || { male: 0, female: 0 }; cur.male += toNumber(r['Total Male']); cur.female += toNumber(r['Total Female']); batchMap.set(b, cur); });
     const batchDistribution = Array.from(batchMap.entries()).map(([batch, v]) => ({ batch, male: v.male, female: v.female }));
-    const genderGrowthTrend = Array.from(batchMap.entries()).map(([batch, v]) => ({ batch, placedMale: v.placedMale, placedFemale: v.placedFemale }));
 
-    // Gender ratios and totals
+    // Growth trend
+    const genderGrowthTrend = Array.from(batchMap.entries()).map(([batch, v]) => ({ batch, placedMale: v.male, placedFemale: v.female }));
+
+    // Overall gender ratio
     const overallGenderRatio = [
       { name: 'Male', value: totalMale },
       { name: 'Female', value: totalFemale }
     ];
+
+    // Total vs placed by gender
     const totalVsPlacedByGender = [
       { gender: 'Male', total: totalMale, placed: placedMale },
       { gender: 'Female', total: totalFemale, placed: placedFemale }
     ];
 
-    // Average package by gender per dept
-    const avgPkgByGenderDept = Array.from(deptMap.entries()).map(([dept, v]) => ({ dept, male: v.pkgMale.length ? Math.round(v.pkgMale.reduce((a,b)=>a+b,0)/v.pkgMale.length) : 0, female: v.pkgFemale.length ? Math.round(v.pkgFemale.reduce((a,b)=>a+b,0)/v.pkgFemale.length) : 0 }));
+    // Average package by gender and dept
+    const avgPkgByGenderDept = Array.from(deptMap.entries()).map(([dept, v]) => ({
+      dept,
+      male: v.pkgMale.length ? Math.round(v.pkgMale.reduce((s, p) => s + p, 0) / v.pkgMale.length) : 0,
+      female: v.pkgFemale.length ? Math.round(v.pkgFemale.reduce((s, p) => s + p, 0) / v.pkgFemale.length) : 0
+    }));
 
-    // Top 5 departments by female/male placement %
-    const topFemalePct = [...deptMaleFemalePct].sort((a,b)=>b.femalePct - a.femalePct).slice(0,5);
-    const topMalePct = [...deptMaleFemalePct].sort((a,b)=>b.malePct - a.malePct).slice(0,5);
+    // Top 5 by female %
+    const topFemalePct = deptMaleFemalePct.sort((a, b) => b.femalePct - a.femalePct).slice(0, 5);
+    const topMalePct = deptMaleFemalePct.sort((a, b) => b.malePct - a.malePct).slice(0, 5);
 
-    // Gender contribution to overall placement % (stacked area)
-    const contribution = Array.from(batchMap.entries()).map(([batch, v]) => {
-      const total = (v.male + v.female) || 1;
-      const pctMale = Math.round((v.placedMale / total) * 100);
-      const pctFemale = Math.round((v.placedFemale / total) * 100);
-      return { batch, pctMale, pctFemale };
-    });
+    // Contribution
+    const contribution = Array.from(batchMap.entries()).map(([batch, v]) => ({
+      batch,
+      pctMale: v.male ? Math.round((v.male / (v.male + v.female)) * 100) : 0,
+      pctFemale: v.female ? Math.round((v.female / (v.male + v.female)) * 100) : 0
+    }));
 
     // Overall summary gauge-like values
     const overallPlaced = placedMale + placedFemale;
@@ -201,389 +227,494 @@ const CareerGenderAnalysis: React.FC = () => {
       contribution,
       overallPct
     };
-  }, [filtered]);
+  }, [filteredRows]);
 
-  const exportFilteredToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filtered);
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Filtered');
     XLSX.writeFile(wb, 'career_gender_analysis_filtered.xlsx');
   };
 
-  const exportFilteredToPdf = () => {
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const margin = 40; let y = margin;
-    doc.setFontSize(14); doc.text('Career - Gender Analysis (Filtered)', margin, y); y += 20;
-    doc.setFontSize(9);
-    const cols = REQUIRED_COLUMNS;
-    let x = margin;
-    cols.forEach(h => { doc.text(String(h), x, y); x += 80; }); y += 14;
-    doc.setLineWidth(0.5); doc.line(margin, y, 555, y); y += 8;
-    filtered.slice(0, 60).forEach(r => {
-      let cx = margin;
-      cols.forEach(h => { const txt = String(r[h] ?? ''); doc.text(txt.length > 14 ? txt.slice(0, 14) + '…' : txt, cx, y); cx += 80; });
-      y += 14;
-      if (y > 780) { doc.addPage(); y = margin; }
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Career - Gender Analysis (Filtered)', 14, 22);
+    
+    const tableData = filteredRows.map(row => 
+      REQUIRED_COLUMNS.map(header => row[header] || '')
+    );
+    
+    doc.autoTable({
+      head: [REQUIRED_COLUMNS],
+      body: tableData,
+      startY: 30,
     });
+    
     doc.save('career_gender_analysis_filtered.pdf');
   };
 
+  const resetFilters = () => {
+    setSearch('');
+    setDept('all');
+    setBatch('all');
+    setPi('all');
+    setGender('all');
+    setPlaced('all');
+    setPackageMin('');
+    setPackageMax('');
+    setCurrentPage(1);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Career - Gender Analysis</h1>
           <p className="text-muted-foreground">Upload Excel/CSV and analyze gender-wise placements</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Input ref={fileRef} type="file" accept=".xlsx,.csv" onChange={(e)=>{ const f=e.target.files?.[0]; if (f) handleFile(f);} } />
-          <Button variant="outline" onClick={()=>fileRef.current?.click()}>Upload</Button>
-          <Button variant="outline" onClick={downloadTemplate}>Download Template</Button>
+        <div className="flex gap-2">
+          <Button onClick={downloadTemplate} variant="outline">
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Download Template
+          </Button>
+          <Button onClick={() => fileRef.current?.click()}>
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Excel
+          </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <div className="space-y-2">
-            <Label>Search</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search any text" className="pl-10 h-10 border border-indigo-300" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Dept</Label>
-            <Select value={dept} onValueChange={setDept}>
-              <SelectTrigger className="h-10 border border-indigo-300"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="All" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {departments.map(d => (<SelectItem key={d} value={String(d)}>{String(d)}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Batch</Label>
-            <Select value={batch} onValueChange={setBatch}>
-              <SelectTrigger className="h-10 border border-indigo-300"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="All" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {batches.map(b => (<SelectItem key={b} value={String(b)}>{String(b)}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>PI</Label>
-            <Select value={pi} onValueChange={setPi}>
-              <SelectTrigger className="h-10 border border-indigo-300"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="All" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {pis.map(p => (<SelectItem key={p} value={String(p)}>{String(p)}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Gender</Label>
-            <Select value={gender} onValueChange={setGender}>
-              <SelectTrigger className="h-10 border border-indigo-300"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="All" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="Male">Male</SelectItem>
-                <SelectItem value="Female">Female</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Placed</Label>
-            <Select value={placed} onValueChange={setPlaced}>
-              <SelectTrigger className="h-10 border border-indigo-300"><Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="All" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="placed">Placed</SelectItem>
-                <SelectItem value="not">Not Placed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-end gap-2 md:col-span-2">
-            <Button variant="outline" onClick={exportFilteredToExcel}>Export Excel</Button>
-            <Button variant="outline" onClick={exportFilteredToPdf}>Export PDF</Button>
-          </div>
-        </CardContent>
-      </Card>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,.csv"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+        className="hidden"
+      />
 
-      {/* Table */}
       {rows.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Data ({filtered.length} rows)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    {REQUIRED_COLUMNS.map(h => (
-                      <th key={h} className="p-2 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.slice(0, 400).map((r, idx) => (
-                    <tr key={idx} className="border-t">
-                      {REQUIRED_COLUMNS.map(h => (
-                        <td key={h} className="p-2 whitespace-nowrap">{String(r[h] ?? '')}</td>
+        <Tabs defaultValue="table" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="table">Data Table</TabsTrigger>
+            <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="table" className="space-y-4">
+            {/* Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="w-5 h-5" />
+                  Filters & Search
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="search">Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        id="search"
+                        placeholder="Search..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dept">Department</Label>
+                    <Select value={dept} onValueChange={setDept}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Departments" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Departments</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d} value={String(d)}>{String(d)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="batch">Batch</Label>
+                    <Select value={batch} onValueChange={setBatch}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Batches" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Batches</SelectItem>
+                        {batches.map((b) => (
+                          <SelectItem key={b} value={String(b)}>{String(b)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pi">PI</Label>
+                    <Select value={pi} onValueChange={setPi}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All PIs" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All PIs</SelectItem>
+                        {pis.map((p) => (
+                          <SelectItem key={p} value={String(p)}>{String(p)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gender</Label>
+                    <Select value={gender} onValueChange={setGender}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Gender</SelectItem>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="placed">Status</Label>
+                    <Select value={placed} onValueChange={setPlaced}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="placed">Placed</SelectItem>
+                        <SelectItem value="not">Not Placed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="packageMin">Min Package</Label>
+                    <Input
+                      id="packageMin"
+                      type="number"
+                      placeholder="Min"
+                      value={packageMin}
+                      onChange={(e) => setPackageMin(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="packageMax">Max Package</Label>
+                    <Input
+                      id="packageMax"
+                      type="number"
+                      placeholder="Max"
+                      value={packageMax}
+                      onChange={(e) => setPackageMax(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center mt-4">
+                  <div className="flex gap-2">
+                    <Button onClick={resetFilters} variant="outline" size="sm">
+                      Reset Filters
+                    </Button>
+                    <Button onClick={exportToExcel} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export Excel
+                    </Button>
+                    <Button onClick={exportToPDF} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export PDF
+                    </Button>
+                  </div>
+                  <Badge variant="secondary">
+                    {filteredRows.length} of {rows.length} records
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Data Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Gender Analysis Data</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        {REQUIRED_COLUMNS.map((h) => (
+                          <th key={h} className="text-left p-2 font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedRows.map((r, idx) => (
+                        <tr key={idx} className="border-b hover:bg-muted/50">
+                          {REQUIRED_COLUMNS.map((h) => (
+                            <td key={h} className="p-2 text-sm">
+                              {String(r[h] ?? '')}
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">Showing first 400 rows.</p>
-          </CardContent>
-        </Card>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="visualizations" className="space-y-6">
+            <Card>
+              <CardHeader><CardTitle>Dept-wise Male vs Female Total Students</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={metrics.deptMaleFemaleTotal}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="male" fill="#3b82f6" />
+                    <Bar dataKey="female" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Dept-wise Male vs Female Placed Students</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={metrics.deptPlacedStack}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="male" fill="#3b82f6" />
+                    <Bar dataKey="female" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>PI vs Male/Female Strength</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.piStrength}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="pi" interval={0} angle={-30} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="male" fill="#3b82f6" />
+                    <Bar dataKey="female" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Dept-wise Male Placement % vs Female Placement %</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={metrics.deptMaleFemalePct}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
+                    <YAxis domain={[0,100]} />
+                    <Tooltip />
+                    <Bar dataKey="malePct" fill="#3b82f6" />
+                    <Bar dataKey="femalePct" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Total Students vs Placed Students by Gender</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.totalVsPlacedByGender}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="gender" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="total" fill="#06b6d4" />
+                    <Bar dataKey="placed" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Overall Gender Ratio</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie dataKey="value" data={metrics.overallGenderRatio} cx="50%" cy="50%" outerRadius={100} label>
+                      {metrics.overallGenderRatio.map((_, idx) => (<Cell key={idx} fill={COLORS[idx % COLORS.length]} />))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Batch Distribution by Gender</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.batchDistribution}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="batch" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="male" fill="#3b82f6" />
+                    <Bar dataKey="female" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Gender Growth Trend Across Batches</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={metrics.genderGrowthTrend}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="batch" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="placedMale" stroke="#3b82f6" />
+                    <Line type="monotone" dataKey="placedFemale" stroke="#ef4444" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Average Package by Gender and Department</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.avgPkgByGenderDept}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="male" fill="#3b82f6" />
+                    <Bar dataKey="female" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Top 5 Departments by Female Placement %</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.topFemalePct}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dept" />
+                    <YAxis domain={[0,100]} />
+                    <Tooltip />
+                    <Bar dataKey="femalePct" fill="#ef4444" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Top 5 Departments by Male Placement %</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={metrics.topMalePct}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="dept" />
+                    <YAxis domain={[0,100]} />
+                    <Tooltip />
+                    <Bar dataKey="malePct" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Gender Contribution to Overall Placement %</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={metrics.contribution}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="batch" />
+                    <YAxis domain={[0,100]} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="pctMale" stackId="1" stroke="#3b82f6" fill="#93c5fd" />
+                    <Area type="monotone" dataKey="pctFemale" stackId="1" stroke="#ef4444" fill="#fca5a5" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Overall Summary Gauge</CardTitle></CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie dataKey="value" data={[{ name: 'Placed %', value: metrics.overallPct }, { name: 'Remaining', value: 100 - metrics.overallPct }]} cx="50%" cy="50%" innerRadius={60} outerRadius={100}>
+                      {[0,1].map((_, idx) => (<Cell key={idx} fill={idx===0 ? '#10b981' : '#e5e7eb'} />))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       )}
 
-      {/* Charts (15) */}
-      {filtered.length > 0 && (
-        <>
-          <Card>
-            <CardHeader><CardTitle>Dept-wise Male vs Female Total Students</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={metrics.deptMaleFemaleTotal}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="male" fill="#3b82f6" />
-                  <Bar dataKey="female" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Dept-wise Placed Male vs Placed Female</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={metrics.deptPlacedStack}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="male" stackId="a" fill="#3b82f6" />
-                  <Bar dataKey="female" stackId="a" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Male vs Female Placement Percentage</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="col-span-1">
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie dataKey="value" data={[{ name: 'Male', value: metrics.placedMale }, { name: 'Female', value: metrics.placedFemale }]} cx="50%" cy="50%" innerRadius={60} outerRadius={100} label>
-                      {[0,1].map((_,idx)=>(<Cell key={idx} fill={idx===0?'#3b82f6':'#ef4444'} />))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <p className="mt-2 text-xs text-muted-foreground text-center">Overall placed split</p>
-              </div>
-              <div className="col-span-1">
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie dataKey="value" data={[{ name: 'Male %', value: metrics.totalMale ? Math.round((metrics.placedMale/metrics.totalMale)*100) : 0 }, { name: 'Female %', value: metrics.totalFemale ? Math.round((metrics.placedFemale/metrics.totalFemale)*100) : 0 }]} cx="50%" cy="50%" innerRadius={60} outerRadius={100} label>
-                      {[0,1].map((_,idx)=>(<Cell key={idx} fill={idx===0?'#3b82f6':'#ef4444'} />))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <p className="mt-2 text-xs text-muted-foreground text-center">Placed percentage by gender</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Batch-wise Gender Distribution</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.batchDistribution}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="batch" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="male" fill="#3b82f6" />
-                  <Bar dataKey="female" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>PI vs Male/Female Strength</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.piStrength}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="pi" interval={0} angle={-30} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="male" fill="#3b82f6" />
-                  <Bar dataKey="female" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Dept-wise Male Placement % vs Female Placement %</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={metrics.deptMaleFemalePct}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis domain={[0,100]} />
-                  <Tooltip />
-                  <Bar dataKey="malePct" fill="#3b82f6" />
-                  <Bar dataKey="femalePct" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Total Students vs Placed Students by Gender</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.totalVsPlacedByGender}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="gender" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="total" fill="#06b6d4" />
-                  <Bar dataKey="placed" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Overall Gender Ratio</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie dataKey="value" data={metrics.overallGenderRatio} cx="50%" cy="50%" innerRadius={60} outerRadius={100} label>
-                    {metrics.overallGenderRatio.map((_,idx)=>(<Cell key={idx} fill={idx===0?'#3b82f6':'#ef4444'} />))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Dept-wise Average Package by Gender</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.avgPkgByGenderDept}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="male" fill="#3b82f6" />
-                  <Bar dataKey="female" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Top 5 Depts with Highest Female Placement %</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={metrics.topFemalePct}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis domain={[0,100]} />
-                  <Tooltip />
-                  <Bar dataKey="femalePct" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Top 5 Depts with Highest Male Placement %</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={metrics.topMalePct}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={60} />
-                  <YAxis domain={[0,100]} />
-                  <Tooltip />
-                  <Bar dataKey="malePct" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Placement Growth Trend by Gender Across Batches</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={metrics.genderGrowthTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="batch" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="placedMale" stroke="#3b82f6" />
-                  <Line type="monotone" dataKey="placedFemale" stroke="#ef4444" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Gender Contribution to Overall Placement %</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={metrics.contribution}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="batch" />
-                  <YAxis domain={[0,100]} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="pctMale" stackId="1" stroke="#3b82f6" fill="#93c5fd" />
-                  <Area type="monotone" dataKey="pctFemale" stackId="1" stroke="#ef4444" fill="#fca5a5" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Overall Summary Gauge</CardTitle></CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie dataKey="value" data={[{ name: 'Placed %', value: metrics.overallPct }, { name: 'Remaining', value: 100 - metrics.overallPct }]} cx="50%" cy="50%" innerRadius={60} outerRadius={100}>
-                    {[0,1].map((_, idx) => (<Cell key={idx} fill={idx===0 ? '#10b981' : '#e5e7eb'} />))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </>
+      {rows.length === 0 && (
+        <Card className="text-center py-12">
+          <CardContent>
+            <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">No Data Uploaded</h3>
+            <p className="text-muted-foreground mb-4">
+              Upload an Excel file to start analyzing gender data
+            </p>
+            <Button onClick={() => fileRef.current?.click()}>
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Excel File
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 };
 
 export default CareerGenderAnalysis;
-
-

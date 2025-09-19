@@ -14,33 +14,29 @@ import { Search, Filter, Download, Upload, FileSpreadsheet, BarChart3, TrendingU
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+type RowData = { [key: string]: any };
+
 const REQUIRED_COLUMNS = [
-  'S.No', 'Reg Number', 'RollNo', 'Name', 'Dept', 'Section', 'PI', 'Job Vertical', 'Job Vertical (IT, CORE, BDE)',
-  '10th', '12th', 'Diploma', 'CGPA', 'CutOff', 'Training Batch', 'Gender',
-  'Company 1', 'Salary (Company 1)', 'Organized By (Company 1)', 'Offer Letter Link (Company 1)', 'Join Letter Link (Company 1)',
-  'Number Of Company Placed', 'Placed or Non Placed', 'Maximum Salary', 'Quota', 'Hosteller / Days scholar', 'Company Joined'
+  'S.No','Reg Number','RollNo','Name','Dept','Section','PI','10th','12th','Diploma','CGPA','CutOff','Training Batch','Gender','Placed or Non Placed','Maximum Salary','Quota','Hosteller / Days scholar','Hosteller/Day Scholar'
 ];
 
 const TEMPLATE_HEADERS = [
-  'S.No','Reg Number','RollNo','Name','Dept','Section','PI','Job Vertical (IT, CORE, BDE)','10th','12th','Diploma','CGPA','CutOff','Training Batch','Gender',
-  'Company 1','Salary (Company 1)','Organized By (Company 1)','Offer Letter Link (Company 1)','Join Letter Link (Company 1)',
-  'Company 2','Salary (Company 2)','Organized By (Company 2)','Offer Letter Link (Company 2)','Join Letter Link (Company 2)',
-  'Company 3','Salary (Company 3)','Organized By (Company 3)','Offer Letter Link (Company 3)','Join Letter Link (Company 3)',
-  'Company 4','Salary (Company 4)','Organized By (Company 4)','Offer Letter Link (Company 4)','Join Letter Link (Company 4)',
-  'Company 5','Salary (Company 5)','Organized By (Company 5)','Offer Letter Link (Company 5)','Join Letter Link (Company 5)',
-  'Company 6','Salary (Company 6)','Organized By (Company 6)','Offer Letter Link (Company 6)','Join Letter Link (Company 6)',
-  'Company 7','Salary (Company 7)','Organized By (Company 7)','Offer Letter Link (Company 7)','Join Letter Link (Company 7)',
-  'Company 8','Salary (Company 8)','Organized By (Company 8)','Offer Letter Link (Company 8)','Join Letter Link (Company 8)',
-  'Company 9','Salary (Company 9)','Organized By (Company 9)','Offer Letter Link (Company 9)','Join Letter Link (Company 9)',
-  'Company 10','Salary (Company 10)','Organized By (Company 10)','Offer Letter Link (Company 10)','Join Letter Link (Company 10)',
-  'Number Of Company Placed','Placed or Non Placed','Maximum Salary','Quota','Hosteller / Days scholar','Company Joined'
+  'S.No','Reg Number','RollNo','Name','Dept','Section','PI','10th','12th','Diploma','CGPA','CutOff','Training Batch','Gender','Placed or Non Placed','Maximum Salary','Quota','Hosteller / Days scholar','Company Joined',
+  ...Array.from({ length: 10 }, (_, i) => `Company ${i+1}`),
+  ...Array.from({ length: 10 }, (_, i) => `Salary (Company ${i+1})`),
+  ...Array.from({ length: 10 }, (_, i) => `Organized By (Company ${i+1})`),
 ];
 
 const normalize = (s: string) => s?.trim().replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
+const toNumber = (v: any): number => {
+  const n = Number(String(v).toString().replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+const isPlaced = (v: any) => String(v || '').toLowerCase().includes('placed');
 
-interface RowData { [key: string]: any }
+const COLORS = ['#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#22c55e', '#eab308'];
 
-const CareerStudents: React.FC = () => {
+const CareerMainDashboard: React.FC = () => {
   const { profile } = useAuth();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -54,10 +50,12 @@ const CareerStudents: React.FC = () => {
   const [dept, setDept] = useState<string>('all');
   const [batch, setBatch] = useState<string>('all');
   const [pi, setPi] = useState<string>('all');
-  const [placed, setPlaced] = useState<string>('all');
+  const [incharge, setIncharge] = useState<string>('all');
+  const [placedFilter, setPlacedFilter] = useState<string>('all');
   const [gender, setGender] = useState<string>('all');
   const [quota, setQuota] = useState<string>('all');
   const [hostelType, setHostelType] = useState<string>('all');
+  const [company, setCompany] = useState<string>('all');
   const [salaryMin, setSalaryMin] = useState('');
   const [salaryMax, setSalaryMax] = useState('');
 
@@ -70,6 +68,13 @@ const CareerStudents: React.FC = () => {
     );
   }
 
+  const downloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, 'career_main_dashboard_template.xlsx');
+  };
+
   const handleFile = async (file: File) => {
     try {
       const ext = file.name.split('.').pop()?.toLowerCase();
@@ -79,33 +84,44 @@ const CareerStudents: React.FC = () => {
       }
 
       let data: RowData[] = [];
+      let fileHeaders: string[] = [];
+
       if (ext === 'csv') {
         const text = await file.text();
         const result = Papa.parse(text, { header: true, skipEmptyLines: true });
-        data = (result.data as RowData[]).map(r => Object.fromEntries(Object.entries(r).map(([k,v])=>[normalize(k), v])));
+        const parsed = result.data as RowData[];
+        data = parsed.map(r => {
+          const mapped: RowData = {};
+          Object.entries(r).forEach(([k, v]) => { mapped[normalize(k)] = v; });
+          return mapped;
+        });
+        fileHeaders = Object.keys(parsed[0] || {}).map(normalize);
       } else {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(ws, { defval: '' }) as RowData[];
-        data = json.map(r => Object.fromEntries(Object.entries(r).map(([k,v])=>[normalize(k), v])));
+        data = json.map(r => {
+          const mapped: RowData = {};
+          Object.entries(r).forEach(([k, v]) => { mapped[normalize(k)] = v; });
+          return mapped;
+        });
+        fileHeaders = Object.keys(json[0] || {}).map(normalize);
       }
 
-      const headers = Object.keys(data[0] || {});
-      const required = REQUIRED_COLUMNS.filter(c => c.startsWith('Job Vertical') ? false : true);
-      const hasJobVertical = headers.includes('Job Vertical') || headers.includes('Job Vertical (IT, CORE, BDE)');
-      const missing = required.filter(c => !headers.includes(c));
+      const missing = REQUIRED_COLUMNS.filter(col => !fileHeaders.includes(col));
       if (missing.length) {
-        toast({ title: 'Validation failed', description: `Missing columns: ${[...missing, !hasJobVertical ? 'Job Vertical' : ''].filter(Boolean).join(', ')}`, variant: 'destructive' });
+        toast({ title: 'Validation failed', description: `Missing columns: ${missing.join(', ')}`, variant: 'destructive' });
         return;
       }
 
       setRows(data);
-      setHeaders(Object.keys(data[0] || {}));
+      setHeaders(fileHeaders);
       setCurrentPage(1);
-      toast({ title: 'Upload successful', description: `${data.length} records loaded` });
-    } catch (e: any) {
-      toast({ title: 'Parse error', description: e.message || 'Failed to parse file', variant: 'destructive' });
+      toast({ title: 'Success', description: `Loaded ${data.length} records` });
+    } catch (error) {
+      console.error('Error processing file:', error);
+      toast({ title: 'Error', description: 'Failed to process file', variant: 'destructive' });
     }
   };
 
@@ -119,29 +135,31 @@ const CareerStudents: React.FC = () => {
       const deptMatch = dept === 'all' || row.Dept === dept;
       const batchMatch = batch === 'all' || row['Training Batch'] === batch;
       const piMatch = pi === 'all' || row.PI === pi;
+      const inchargeMatch = incharge === 'all' || row.Incharge === incharge;
       const genderMatch = gender === 'all' || row.Gender === gender;
       const quotaMatch = quota === 'all' || row.Quota === quota;
       const hostelMatch = hostelType === 'all' || row['Hosteller / Days scholar'] === hostelType;
       
       let placedMatch = true;
-      if (placed === 'placed') {
-        placedMatch = String(row['Placed or Non Placed'] || '').toLowerCase().includes('placed');
-      } else if (placed === 'not') {
-        placedMatch = !String(row['Placed or Non Placed'] || '').toLowerCase().includes('placed');
+      if (placedFilter === 'placed') {
+        placedMatch = isPlaced(row['Placed or Non Placed']);
+      } else if (placedFilter === 'not') {
+        placedMatch = !isPlaced(row['Placed or Non Placed']);
       }
 
-      const salaryMatch = (!salaryMin || Number(row['Maximum Salary']) >= Number(salaryMin)) &&
-                         (!salaryMax || Number(row['Maximum Salary']) <= Number(salaryMax));
+      const salaryMatch = (!salaryMin || toNumber(row['Maximum Salary']) >= toNumber(salaryMin)) &&
+                         (!salaryMax || toNumber(row['Maximum Salary']) <= toNumber(salaryMax));
 
-      return searchMatch && deptMatch && batchMatch && piMatch && 
+      return searchMatch && deptMatch && batchMatch && piMatch && inchargeMatch && 
              genderMatch && quotaMatch && hostelMatch && placedMatch && salaryMatch;
     });
-  }, [rows, search, dept, batch, pi, gender, quota, hostelType, placed, salaryMin, salaryMax]);
+  }, [rows, search, dept, batch, pi, incharge, gender, quota, hostelType, placedFilter, salaryMin, salaryMax]);
 
   // Get unique values for filters
   const deptOptions = useMemo(() => Array.from(new Set(rows.map(r => r['Dept']).filter(Boolean))) as string[], [rows]);
   const batchOptions = useMemo(() => Array.from(new Set(rows.map(r => r['Training Batch']).filter(Boolean))) as string[], [rows]);
   const piOptions = useMemo(() => Array.from(new Set(rows.map(r => r['PI']).filter(Boolean))) as string[], [rows]);
+  const inchargeOptions = useMemo(() => Array.from(new Set(rows.map(r => r['Incharge']).filter(Boolean))) as string[], [rows]);
 
   // Pagination
   const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
@@ -151,16 +169,16 @@ const CareerStudents: React.FC = () => {
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredRows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Students');
-    XLSX.writeFile(wb, 'students_export.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, 'Main Dashboard');
+    XLSX.writeFile(wb, 'main_dashboard_export.xlsx');
   };
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    doc.text('Career Students Report', 20, 20);
+    doc.text('Career Main Dashboard Report', 20, 20);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
     doc.text(`Total Records: ${filteredRows.length}`, 20, 40);
-    doc.save('students_report.pdf');
+    doc.save('main_dashboard_report.pdf');
   };
 
   const resetFilters = () => {
@@ -168,29 +186,22 @@ const CareerStudents: React.FC = () => {
     setDept('all');
     setBatch('all');
     setPi('all');
-    setPlaced('all');
+    setIncharge('all');
+    setPlacedFilter('all');
     setGender('all');
     setQuota('all');
     setHostelType('all');
+    setCompany('all');
     setSalaryMin('');
     setSalaryMax('');
   };
-
-  const downloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, 'career_student_template.xlsx');
-  };
-
-  const COLORS = ['#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#22c55e', '#eab308'];
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Career - Student List</h1>
-          <p className="text-muted-foreground">Upload Excel/CSV and browse students</p>
+          <h1 className="text-3xl font-bold">Career - Main Dashboard</h1>
+          <p className="text-muted-foreground">Unified dashboard across students, companies, quota, gender and more</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={downloadTemplate} variant="outline">
@@ -291,7 +302,7 @@ const CareerStudents: React.FC = () => {
 
                   <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select value={placed} onValueChange={setPlaced}>
+                    <Select value={placedFilter} onValueChange={setPlacedFilter}>
                       <SelectTrigger>
                         <SelectValue placeholder="All Status" />
                       </SelectTrigger>
@@ -346,32 +357,36 @@ const CareerStudents: React.FC = () => {
             {/* Data Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Students Data</CardTitle>
+                <CardTitle>Main Dashboard Data</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-2">Reg No</th>
+                        <th className="text-left p-2">S.No</th>
                         <th className="text-left p-2">Name</th>
+                        <th className="text-left p-2">Reg Number</th>
                         <th className="text-left p-2">Dept</th>
+                        <th className="text-left p-2">Batch</th>
                         <th className="text-left p-2">PI</th>
-                        <th className="text-left p-2">CGPA</th>
-                        <th className="text-left p-2">Max Salary</th>
+                        <th className="text-left p-2">Gender</th>
                         <th className="text-left p-2">Status</th>
+                        <th className="text-left p-2">Max Salary</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedRows.map((row, index) => (
                         <tr key={index} className="border-b hover:bg-muted/50">
+                          <td className="p-2">{row['S.No']}</td>
+                          <td className="p-2">{row.Name}</td>
                           <td className="p-2">{row['Reg Number']}</td>
-                          <td className="p-2">{row['Name']}</td>
-                          <td className="p-2">{row['Dept']}</td>
-                          <td className="p-2">{row['PI']}</td>
-                          <td className="p-2">{row['CGPA']}</td>
-                          <td className="p-2">{row['Maximum Salary']}</td>
+                          <td className="p-2">{row.Dept}</td>
+                          <td className="p-2">{row['Training Batch']}</td>
+                          <td className="p-2">{row.PI}</td>
+                          <td className="p-2">{row.Gender}</td>
                           <td className="p-2">{row['Placed or Non Placed']}</td>
+                          <td className="p-2">{row['Maximum Salary']}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -413,6 +428,7 @@ const CareerStudents: React.FC = () => {
 
           <TabsContent value="visualizations" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Basic visualizations */}
               <Card>
                 <CardHeader>
                   <CardTitle>Placement Overview</CardTitle>
@@ -421,7 +437,7 @@ const CareerStudents: React.FC = () => {
                   <div className="text-center">
                     <div className="text-4xl font-bold text-primary mb-2">
                       {filteredRows.length > 0 ? 
-                        Math.round((filteredRows.filter(r => String(r['Placed or Non Placed'] || '').toLowerCase().includes('placed')).length / filteredRows.length) * 100) : 0}%
+                        Math.round((filteredRows.filter(r => isPlaced(r['Placed or Non Placed'])).length / filteredRows.length) * 100) : 0}%
                     </div>
                     <p className="text-muted-foreground">Overall Placement Rate</p>
                     <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
@@ -431,7 +447,7 @@ const CareerStudents: React.FC = () => {
                       </div>
                       <div>
                         <div className="font-semibold">Placed Students</div>
-                        <div>{filteredRows.filter(r => String(r['Placed or Non Placed'] || '').toLowerCase().includes('placed')).length}</div>
+                        <div>{filteredRows.filter(r => isPlaced(r['Placed or Non Placed'])).length}</div>
                       </div>
                     </div>
                   </div>
@@ -475,7 +491,7 @@ const CareerStudents: React.FC = () => {
             <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-lg font-semibold mb-2">No Data Uploaded</h3>
             <p className="text-muted-foreground mb-4">
-              Upload an Excel file to start analyzing student data
+              Upload an Excel file to start analyzing career data
             </p>
             <Button onClick={() => fileRef.current?.click()}>
               <Upload className="w-4 h-4 mr-2" />
@@ -488,4 +504,4 @@ const CareerStudents: React.FC = () => {
   );
 };
 
-export default CareerStudents;
+export default CareerMainDashboard;

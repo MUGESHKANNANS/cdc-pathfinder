@@ -32,6 +32,7 @@ import CareerGenderAnalysis from "@/pages/CareerGenderAnalysis";
 import CareerQuotaAnalysis from "@/pages/CareerQuotaAnalysis";
 import CareerMainDashboard from "@/pages/CareerMainDashboard";
 import CareerHostelDayScholarAnalysis from "@/pages/CareerHostelDayScholarAnalysis";
+import CareerBatchAnalysis from "@/pages/CareerBatchAnalysis";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,7 +58,7 @@ const App = () => (
               <Route path="career/all-analysis" element={<CareerAllAnalysis />} />
               <Route path="career/company-analysis" element={<CareerCompanyAnalysis />} />
               <Route path="career/placement-offer-analysis" element={<CareerPlacementOffer />} />
-              <Route path="career/batch-analysis" element={<ComingSoon title="Career - Batch Analysis" />} />
+              <Route path="career/batch-analysis" element={<CareerBatchAnalysis />} />
               <Route path="career/gender-analysis" element={<CareerGenderAnalysis />} />
               <Route path="career/quota-analysis" element={<CareerQuotaAnalysis />} />
               <Route path="career/hostel-day-scholar-analysis" element={<CareerHostelDayScholarAnalysis />} />

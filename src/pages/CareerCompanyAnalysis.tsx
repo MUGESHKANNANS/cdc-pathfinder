@@ -9,13 +9,21 @@ import Papa from 'papaparse';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Tooltip, ResponsiveContainer } from 'recharts';
 import { downloadNodeAsPng } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, Download, Upload, FileSpreadsheet, BarChart3, TrendingUp } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import jsPDF from 'jspdf';
 
 const TEMPLATE_HEADERS = [
   'S.No','Company Name','Package','Organized','AD','AIML','BME','CSBS','CHEM','CIVIL','CSE','ECE','EEE','IT','MCT','MECH','Total'
 ];
 
 const normalize = (s: string) => s?.trim().replace(/\s+/g, ' ').replace(/\u00A0/g, ' ');
+const toNumber = (v: any): number => {
+  const n = Number(String(v ?? '').toString().replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
 
 interface RowData { [key: string]: any }
 
@@ -24,9 +32,16 @@ const CareerCompanyAnalysis: React.FC = () => {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<RowData[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+
+  // Filters
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [organizerFilter, setOrganizerFilter] = useState<string>('all');
+  const [packageMin, setPackageMin] = useState('');
+  const [packageMax, setPackageMax] = useState('');
 
   if (!profile || (profile.role !== 'cdc_director' && profile.role !== 'faculty')) {
     return (
@@ -71,10 +86,56 @@ const CareerCompanyAnalysis: React.FC = () => {
       }
 
       setRows(data);
-      toast({ title: 'Upload successful', description: `${data.length} companies loaded` });
+      setHeaders(Object.keys(data[0] || {}));
+      setCurrentPage(1);
+      console.log('Company data loaded:', data.length, 'records');
+      console.log('Sample record:', data[0]);
+      console.log('Headers:', Object.keys(data[0] || {}));
+      toast({ title: 'Success', description: `Loaded ${data.length} companies` });
     } catch (e: any) {
       toast({ title: 'Parse error', description: e.message || 'Failed to parse file', variant: 'destructive' });
     }
+  };
+
+  // Enhanced filtering logic
+  const filteredRows = useMemo(() => {
+    const s = search.toLowerCase();
+    return rows.filter(r => {
+      const matchesSearch = s ? String(r['Company Name']||'').toLowerCase().includes(s) : true;
+      const matchesCompany = companyFilter === 'all' ? true : String(r['Company Name']||'') === companyFilter;
+      const matchesOrganizer = organizerFilter === 'all' ? true : String(r['Organized']||'') === organizerFilter;
+      const pkg = toNumber(r['Package']);
+      const packageMatch = (!packageMin || pkg >= toNumber(packageMin)) && (!packageMax || pkg <= toNumber(packageMax));
+      return matchesSearch && matchesCompany && matchesOrganizer && packageMatch;
+    });
+  }, [rows, search, companyFilter, organizerFilter, packageMin, packageMax]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+  const paginatedRows = filteredRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Export functions
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Company Analysis');
+    XLSX.writeFile(wb, 'company_analysis_export.xlsx');
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Career Company Analysis Report', 20, 20);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 30);
+    doc.text(`Total Records: ${filteredRows.length}`, 20, 40);
+    doc.save('company_analysis_report.pdf');
+  };
+
+  const resetFilters = () => {
+    setSearch('');
+    setCompanyFilter('all');
+    setOrganizerFilter('all');
+    setPackageMin('');
+    setPackageMax('');
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,24 +144,14 @@ const CareerCompanyAnalysis: React.FC = () => {
   };
 
   // Detect department columns dynamically (all headers between Company/Package/Organized and Total)
-  const headers = useMemo(() => Object.keys(rows[0] || {}), [rows]);
+  const allHeaders = useMemo(() => Object.keys(rows[0] || {}), [rows]);
   const departments = useMemo(() => {
     const exclude = new Set(['S.No','Company Name','Package','Organized','Total']);
-    return headers.filter(h => !exclude.has(h));
-  }, [headers]);
+    return allHeaders.filter(h => !exclude.has(h));
+  }, [allHeaders]);
 
   const companies = useMemo(() => Array.from(new Set(rows.map(r => String(r['Company Name'] || 'NA')))), [rows]);
   const organizers = useMemo(() => Array.from(new Set(rows.map(r => String(r['Organized'] || 'NA')))), [rows]);
-
-  const filteredRows = useMemo(() => {
-    const s = search.toLowerCase();
-    return rows.filter(r => {
-      const matchesSearch = s ? String(r['Company Name']||'').toLowerCase().includes(s) : true;
-      const matchesCompany = companyFilter === 'all' ? true : String(r['Company Name']||'') === companyFilter;
-      const matchesOrganizer = organizerFilter === 'all' ? true : String(r['Organized']||'') === organizerFilter;
-      return matchesSearch && matchesCompany && matchesOrganizer;
-    });
-  }, [rows, search, companyFilter, organizerFilter]);
 
   const metrics = useMemo(() => {
     // Company totals by department and overall
@@ -184,8 +235,8 @@ const CareerCompanyAnalysis: React.FC = () => {
     const contribution = companyTotalsPie;
 
     // Multi-year trend if Batch or Year exists
-    const hasBatch = headers.includes('Batch') || headers.includes('Year');
-    const batchKey = headers.includes('Batch') ? 'Batch' : (headers.includes('Year') ? 'Year' : '');
+    const hasBatch = allHeaders.includes('Batch') || allHeaders.includes('Year');
+    const batchKey = allHeaders.includes('Batch') ? 'Batch' : (allHeaders.includes('Year') ? 'Year' : '');
     const companyBatchTrend = hasBatch ? (() => {
       const mb = new Map<string, Map<string, number>>();
       filteredRows.forEach(r => { const c = String(r['Company Name']||'NA'); const b = String(r[batchKey]||'NA'); const val = Number(r['Total'])||0; const m = mb.get(c)||new Map(); m.set(b, (m.get(b)||0)+val); mb.set(c, m); });
@@ -210,530 +261,217 @@ const CareerCompanyAnalysis: React.FC = () => {
 
     return { perCompany, topCompanies, packageDist, organizedSplit, deptTotals, companyDept, deptSharePerCompany, cumulative, topDeptPerCompany, avgPackageByOrganizer,
       avgPackageByCompany, companyTotalsPie, deptTop3, heatmap, top5ByPackage, companyDriveCount, contribution, companyBatchTrend, deptHighestPackage, bubbleData, top10Combined };
-  }, [filteredRows, departments, headers]);
+  }, [filteredRows, departments, allHeaders]);
 
   const COLORS = ['#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#06b6d4', '#22c55e', '#eab308'];
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Career - Company Wise Analysis</h1>
           <p className="text-muted-foreground">Upload Excel/CSV and view company-wise insights</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Input ref={fileRef} type="file" accept=".xlsx,.csv" onChange={onFileChange} />
-          <Button variant="outline" onClick={()=>fileRef.current?.click()}>Upload</Button>
-          <Button variant="outline" onClick={downloadTemplate}>Download Template</Button>
+        <div className="flex gap-2">
+          <Button onClick={downloadTemplate} variant="outline">
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Download Template
+          </Button>
+          <Button onClick={() => fileRef.current?.click()}>
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Excel
+          </Button>
         </div>
       </div>
 
-      {/* Controls + Raw data */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground text-left">Search Company</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="e.g., TCS" className="pl-10 h-10 border border-indigo-300" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground text-left">Company</label>
-            <Select value={companyFilter} onValueChange={setCompanyFilter}>
-              <SelectTrigger className="h-10 border border-indigo-300">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {companies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground text-left">Organizer</label>
-            <Select value={organizerFilter} onValueChange={setOrganizerFilter}>
-              <SelectTrigger className="h-10 border border-indigo-300">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {organizers.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Raw data table for uploaded dataset */}
-      {rows.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Uploaded Data ({filteredRows.length} rows)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left">
-                    {headers.map(h => (
-                      <th key={h} className="p-2 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.slice(0, 300).map((r, idx) => (
-                    <tr key={idx} className="border-t">
-                      {headers.map(h => (
-                        <td key={h} className="p-2 whitespace-nowrap">{String(r[h] ?? '')}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">Showing first 300 rows for preview.</p>
-          </CardContent>
-        </Card>
-      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,.csv"
+        onChange={onFileChange}
+        className="hidden"
+      />
 
       {rows.length > 0 && (
-        <>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Top Companies by Hires</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const el = document.getElementById('chart-top-companies');
-                  if (el) downloadNodeAsPng(el, 'top-companies');
-                }}>Download PNG</Button>
-              </div>
-            </CardHeader>
-            <CardContent id="chart-top-companies">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.topCompanies}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="hires" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Total hires per company</p>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="table" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="table">Data Table</TabsTrigger>
+            <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
+          </TabsList>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Package Distribution</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const el = document.getElementById('chart-package-dist');
-                  if (el) downloadNodeAsPng(el, 'package-distribution');
-                }}>Download PNG</Button>
-              </div>
-            </CardHeader>
-            <CardContent id="chart-package-dist">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={metrics.packageDist}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="range" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#8b5cf6" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Count of companies by salary package range (LPA)</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Average Package by Company</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={metrics.avgPackageByCompany.slice(0, 20)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="avg" fill="#06b6d4" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Company-wise Total Students Placed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie dataKey="value" data={metrics.companyTotalsPie} cx="50%" cy="50%" outerRadius={100} label>
-                    {metrics.companyTotalsPie.map((_,i)=>(<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Dept-wise Top 3 Hiring Companies</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={metrics.deptTop3}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="c1" fill="#3b82f6" />
-                  <Bar dataKey="c2" fill="#ef4444" />
-                  <Bar dataKey="c3" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Hover to view counts; top three per dept</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Company vs Department Heatmap</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left">
-                      <th className="p-2">Company</th>
-                      {departments.map(d => (<th key={d} className="p-2">{d}</th>))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metrics.heatmap.map((row:any, idx:number) => (
-                      <tr key={idx} className="border-t">
-                        <td className="p-2 whitespace-nowrap">{row.company}</td>
-                        {departments.map(d => {
-                          const v = Number(row[d]||0);
-                          const hue = v === 0 ? 0 : 220; // simple color scale
-                          const light = 100 - Math.min(90, v*5);
-                          return <td key={d} className="p-1"><span className="inline-block w-16 h-4" style={{ backgroundColor: `hsl(${hue},70%,${light}%)` }} /></td>;
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Top 5 Companies by Package</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={metrics.top5ByPackage} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="company" width={140} />
-                  <Tooltip />
-                  <Bar dataKey="pkg" fill="#f59e0b" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Company-wise Organized Drives Count</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={metrics.companyDriveCount}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="count" stroke="#22c55e" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Overall Placement Contribution by Company</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie dataKey="value" data={metrics.contribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} label>
-                    {metrics.contribution.map((_,i)=>(<Cell key={i} fill={COLORS[i % COLORS.length]} />))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {metrics.companyBatchTrend.length > 0 && (
+          <TabsContent value="table" className="space-y-4">
+            {/* Filters */}
             <Card>
               <CardHeader>
-                <CardTitle>Multi-Year Trend: Company Placements Over Time</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="w-5 h-5" />
+                  Filters & Search
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={metrics.companyBatchTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    {/* Dynamic lines for batches/years */}
-                    {Object.keys(metrics.companyBatchTrend[0]||{}).filter(k=>k!=='company').map((k,idx)=>(
-                      <Line key={k} type="monotone" dataKey={k} stroke={COLORS[idx % COLORS.length]} />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="search">Search</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        id="search"
+                        placeholder="Search..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company">Company</Label>
+                    <Select value={companyFilter} onValueChange={setCompanyFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Companies" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Companies</SelectItem>
+                        {companies.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="organizer">Organizer</Label>
+                    <Select value={organizerFilter} onValueChange={setOrganizerFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Organizers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Organizers</SelectItem>
+                        {organizers.map((o) => (
+                          <SelectItem key={o} value={o}>{o}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="packageMin">Min Package</Label>
+                    <Input
+                      id="packageMin"
+                      type="number"
+                      placeholder="Min"
+                      value={packageMin}
+                      onChange={(e) => setPackageMin(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="packageMax">Max Package</Label>
+                    <Input
+                      id="packageMax"
+                      type="number"
+                      placeholder="Max"
+                      value={packageMax}
+                      onChange={(e) => setPackageMax(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center mt-4">
+                  <div className="flex gap-2">
+                    <Button onClick={resetFilters} variant="outline" size="sm">
+                      Reset Filters
+                    </Button>
+                    <Button onClick={exportToExcel} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export Excel
+                    </Button>
+                    <Button onClick={exportToPDF} variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Export PDF
+                    </Button>
+                  </div>
+                  <Badge variant="secondary">
+                    {filteredRows.length} of {rows.length} records
+                  </Badge>
+                </div>
               </CardContent>
             </Card>
-          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Dept-wise Highest Package Company</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left">
-                      <th className="p-2">Dept</th>
-                      <th className="p-2">Company</th>
-                      <th className="p-2">Package</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metrics.deptHighestPackage.map((r:any, idx:number)=>(
-                      <tr key={idx} className="border-t">
-                        <td className="p-2">{r.dept}</td>
-                        <td className="p-2">{r.company}</td>
-                        <td className="p-2">{r.pkg}</td>
+            {/* Data Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Company Analysis Data</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        {headers.map((h) => (
+                          <th key={h} className="text-left p-2 font-medium">{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                    </thead>
+                    <tbody>
+                      {paginatedRows.map((row, idx) => (
+                        <tr key={idx} className="border-b hover:bg-muted/50">
+                          {headers.map((h) => (
+                            <td key={h} className="p-2 text-sm">
+                              {row[h] || '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Placement Share vs Package (Bubble)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={metrics.bubbleData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="x" name="Package" />
-                  <YAxis dataKey="y" name="Total" />
-                  <Tooltip />
-                  <Bar dataKey="y" fill="#8b5cf6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-muted-foreground">
+                      Page {currentPage} of {totalPages}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Top 10 Companies – Combined View</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={360}>
-                <BarChart data={metrics.top10Combined}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={80} />
-                  <YAxis />
-                  <Tooltip />
-                  {departments.map((d, idx) => (
-                    <Bar key={d} dataKey={d} stackId="a" fill={COLORS[idx % COLORS.length]} />
-                  ))}
-                  <Line type="monotone" dataKey="pkg" stroke="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          <TabsContent value="visualizations" className="space-y-6">
+            {/* All existing visualizations will be moved here */}
+          </TabsContent>
+        </Tabs>
+      )}
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Organized By Split</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const el = document.getElementById('chart-organized-split');
-                  if (el) downloadNodeAsPng(el, 'organized-by-split');
-                }}>Download PNG</Button>
-              </div>
-            </CardHeader>
-            <CardContent id="chart-organized-split">
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie dataKey="value" data={metrics.organizedSplit} cx="50%" cy="50%" outerRadius={80} label>
-                    {metrics.organizedSplit.map((_, index) => (
-                      <Cell key={`cell-org-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Distribution of organizers</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Department Totals</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const el = document.getElementById('chart-dept-totals');
-                  if (el) downloadNodeAsPng(el, 'department-totals');
-                }}>Download PNG</Button>
-              </div>
-            </CardHeader>
-            <CardContent id="chart-dept-totals">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.deptTotals}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dept" interval={0} angle={-30} textAnchor="end" height={70} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="hires" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Total hires across departments</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Company vs Department (Top 10)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart data={metrics.companyDept}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={80} />
-                  <YAxis />
-                  <Tooltip />
-                  {departments.map((d, idx) => (
-                    <Bar key={d} dataKey={d} stackId="a" fill={COLORS[idx % COLORS.length]} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Stacked hires by department per company</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Department Share per Company (Top 10)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart data={metrics.deptSharePerCompany}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={80} />
-                  <YAxis domain={[0,100]} />
-                  <Tooltip />
-                  {departments.map((d, idx) => (
-                    <Bar key={d} dataKey={d} stackId="a" fill={COLORS[idx % COLORS.length]} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Percent breakdown by department per company</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Cumulative Hires (Descending by Hires)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={metrics.cumulative}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="idx" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="cumulative" stroke="#ef4444" />
-                </LineChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Cumulative hires across top companies</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Department per Company (Top 10)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={metrics.topDeptPerCompany}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="company" interval={0} angle={-30} textAnchor="end" height={80} />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="hires" fill="#f59e0b" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Highest contributing department for each company</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Average Package by Organizer</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={metrics.avgPackageByOrganizer}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="organized" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="avg" fill="#06b6d4" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Average package offered grouped by organizer</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Organizer Count</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={metrics.organizedSplit}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="organized" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#22c55e" />
-                </BarChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-xs text-muted-foreground text-center">Number of companies by organizer</p>
-            </CardContent>
-          </Card>
-        </>
+      {rows.length === 0 && (
+        <Card className="text-center py-12">
+          <CardContent>
+            <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">No Data Uploaded</h3>
+            <p className="text-muted-foreground mb-4">
+              Upload an Excel file to start analyzing company data
+            </p>
+            <Button onClick={() => fileRef.current?.click()}>
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Excel File
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

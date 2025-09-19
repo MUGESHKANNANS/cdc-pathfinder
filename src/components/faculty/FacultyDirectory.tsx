@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Eye, Edit, UserX, UserCheck, Search, Filter, Users, UserPlus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { DialogFooter } from '@/components/ui/dialog';
+import { Pagination } from '@/components/ui/pagination';
 
 interface FacultyProfile {
   id: string;
@@ -38,7 +39,6 @@ const FacultyDirectory = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [facultyList, setFacultyList] = useState<FacultyProfile[]>([]);
-  const [filteredFaculty, setFilteredFaculty] = useState<FacultyProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -46,6 +46,8 @@ const FacultyDirectory = () => {
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyProfile | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -73,7 +75,6 @@ const FacultyDirectory = () => {
 
       if (error) throw error;
       setFacultyList(data || []);
-      setFilteredFaculty(data || []);
     } catch (error: any) {
       console.error('Error fetching faculty profiles:', error);
       toast({
@@ -162,7 +163,7 @@ const FacultyDirectory = () => {
   };
 
   // Filter faculty based on search and filters
-  useEffect(() => {
+  const filteredFaculty = useMemo(() => {
     let filtered = facultyList;
 
     // Search filter
@@ -187,8 +188,21 @@ const FacultyDirectory = () => {
       }
     }
 
-    setFilteredFaculty(filtered);
-  }, [searchTerm, departmentFilter, statusFilter, facultyList]);
+    return filtered;
+  }, [facultyList, searchTerm, departmentFilter, statusFilter]);
+
+  const paginatedFaculty = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredFaculty.slice(startIndex, endIndex);
+  }, [filteredFaculty, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredFaculty.length / itemsPerPage);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, departmentFilter, statusFilter]);
 
   // Get unique departments for filter
   const departments = [...new Set(facultyList.map(f => f.department).filter(Boolean))];
@@ -459,7 +473,7 @@ const FacultyDirectory = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredFaculty.map((faculty) => (
+                {paginatedFaculty.map((faculty) => (
                   <TableRow key={faculty.id}>
                     <TableCell className="font-medium">
                       {faculty.name || 'Not Set'}
@@ -517,6 +531,22 @@ const FacultyDirectory = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {filteredFaculty.length >= 20 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredFaculty.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={(newItemsPerPage) => {
+            setItemsPerPage(newItemsPerPage);
+            setCurrentPage(1);
+          }}
+          className="mt-6"
+        />
+      )}
 
       {/* View Profile Dialog */}
       <Dialog open={!!selectedFaculty} onOpenChange={() => setSelectedFaculty(null)}>

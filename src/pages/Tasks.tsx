@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Calendar, User, AlertCircle, CheckCircle2, Clock, Filter } from 'lucide-react';
+import { Pagination } from '@/components/ui/pagination';
 
 interface Task {
   id: string;
@@ -39,6 +40,8 @@ const Tasks = () => {
   const [filter, setFilter] = useState<'all' | 'assigned' | 'created'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   const fetchTasks = async () => {
     try {
@@ -116,25 +119,40 @@ const Tasks = () => {
     }
   };
 
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = searchTerm
-      ? (task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         (task.description || '').toLowerCase().includes(searchTerm.toLowerCase()))
-      : true;
-    // Status filter
-    if (statusFilter !== 'all' && task.status !== statusFilter) {
-      return false;
-    }
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      const matchesSearch = searchTerm
+        ? (task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (task.description || '').toLowerCase().includes(searchTerm.toLowerCase()))
+        : true;
+      // Status filter
+      if (statusFilter !== 'all' && task.status !== statusFilter) {
+        return false;
+      }
 
-    // Role-based filter
-    if (filter === 'assigned') {
-      return task.assigned_to === profile?.user_id;
-    } else if (filter === 'created') {
-      return task.created_by === profile?.user_id;
-    }
+      // Role-based filter
+      if (filter === 'assigned') {
+        return task.assigned_to === profile?.user_id;
+      } else if (filter === 'created') {
+        return task.created_by === profile?.user_id;
+      }
 
-    return matchesSearch;
-  });
+      return matchesSearch;
+    });
+  }, [tasks, searchTerm, statusFilter, filter, profile?.user_id]);
+
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredTasks.slice(startIndex, endIndex);
+  }, [filteredTasks, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, statusFilter, searchTerm]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -250,7 +268,7 @@ const Tasks = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTasks.map((task) => (
+                {paginatedTasks.map((task) => (
                   <TableRow key={task.id}>
                     <TableCell>
                       <div>
@@ -314,6 +332,22 @@ const Tasks = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {filteredTasks.length >= 20 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredTasks.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={(newItemsPerPage) => {
+            setItemsPerPage(newItemsPerPage);
+            setCurrentPage(1);
+          }}
+          className="mt-6"
+        />
+      )}
     </div>
   );
 };

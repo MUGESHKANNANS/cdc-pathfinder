@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Calendar, MapPin, Users, BookOpen, Plus, Search, Filter } from 'lucide-
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { Pagination } from '@/components/ui/pagination';
 
 interface Training {
   id: string;
@@ -35,6 +36,8 @@ const Training = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [batchFilter, setBatchFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   const isCDCDirector = profile?.role === 'cdc_director';
 
@@ -147,12 +150,27 @@ const Training = () => {
     );
   };
 
-  const filteredTrainings = trainings.filter(training => {
-    const matchesSearch = training.training_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || training.status === statusFilter;
-    const matchesBatch = batchFilter === 'All' || training.batch === batchFilter;
-    return matchesSearch && matchesStatus && matchesBatch;
-  });
+  const filteredTrainings = useMemo(() => {
+    return trainings.filter(training => {
+      const matchesSearch = training.training_name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'All' || training.status === statusFilter;
+      const matchesBatch = batchFilter === 'All' || training.batch === batchFilter;
+      return matchesSearch && matchesStatus && matchesBatch;
+    });
+  }, [trainings, searchTerm, statusFilter, batchFilter]);
+
+  const paginatedTrainings = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredTrainings.slice(startIndex, endIndex);
+  }, [filteredTrainings, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredTrainings.length / itemsPerPage);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, batchFilter]);
 
   const uniqueBatches = [...new Set(trainings.map(t => t.batch))];
 
@@ -220,7 +238,7 @@ const Training = () => {
 
       {/* Training Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredTrainings.map((training) => (
+        {paginatedTrainings.map((training) => (
           <Card key={training.id} className="relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-0.5">
             <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50 via-transparent to-pink-50" />
             <CardHeader className="relative">
@@ -310,6 +328,22 @@ const Training = () => {
           </Card>
         ))}
       </div>
+
+      {/* Pagination */}
+      {filteredTrainings.length >= 20 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredTrainings.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={(newItemsPerPage) => {
+            setItemsPerPage(newItemsPerPage);
+            setCurrentPage(1);
+          }}
+          className="mt-6"
+        />
+      )}
 
       {filteredTrainings.length === 0 && (
         <div className="text-center py-12">

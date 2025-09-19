@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { format, isToday, isPast, isFuture } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Pagination } from '@/components/ui/pagination';
 
 interface Event {
   id: string;
@@ -45,6 +46,8 @@ const Events = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<(Event & { signed_image_url?: string | null; is_image?: boolean }) | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   const isDirector = profile?.role === 'cdc_director';
 
@@ -138,21 +141,36 @@ const Events = () => {
     return assignments.some(assignment => assignment.event_id === eventId);
   };
 
-  const filteredEvents = events.filter(event => {
-    const status = getEventStatus(event.event_date);
-    const matchesFilter = filter === 'all' || status === filter;
-    const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.organized_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.category?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || event.category === categoryFilter;
-    
-    // For faculty, show all events or only assigned ones based on view
-    if (!isDirector) {
+  const filteredEvents = useMemo(() => {
+    return events.filter(event => {
+      const status = getEventStatus(event.event_date);
+      const matchesFilter = filter === 'all' || status === filter;
+      const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           event.organized_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           event.category?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = categoryFilter === 'all' || event.category === categoryFilter;
+      
+      // For faculty, show all events or only assigned ones based on view
+      if (!isDirector) {
+        return matchesFilter && matchesSearch && matchesCategory;
+      }
+      
       return matchesFilter && matchesSearch && matchesCategory;
-    }
-    
-    return matchesFilter && matchesSearch && matchesCategory;
-  });
+    });
+  }, [events, filter, searchTerm, categoryFilter, isDirector]);
+
+  const paginatedEvents = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredEvents.slice(startIndex, endIndex);
+  }, [filteredEvents, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchTerm, categoryFilter]);
 
   const categories = Array.from(new Set(events.map(e => e.category).filter(Boolean)));
 
@@ -315,7 +333,7 @@ const Events = () => {
 
       {/* Events Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredEvents.map((event) => {
+        {paginatedEvents.map((event) => {
           const status = getEventStatus(event.event_date);
           const isAssigned = !isDirector && isAssignedToEvent(event.id);
           const bannerUrl = event.is_image && event.signed_image_url ? event.signed_image_url : '/placeholder.svg';
@@ -409,6 +427,22 @@ const Events = () => {
           );
         })}
       </div>
+
+      {/* Pagination */}
+      {filteredEvents.length >= 20 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredEvents.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={(newItemsPerPage) => {
+            setItemsPerPage(newItemsPerPage);
+            setCurrentPage(1);
+          }}
+          className="mt-6"
+        />
+      )}
 
       {filteredEvents.length === 0 && (
         <Card>
