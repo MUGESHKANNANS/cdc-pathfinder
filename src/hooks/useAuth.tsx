@@ -123,9 +123,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const clearOAuthHashFromUrl = () => {
-      if (typeof window !== 'undefined' && window.location.hash &&
-          (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token=') || window.location.hash.includes('provider_token=') )) {
-        const cleanUrl = window.location.pathname + window.location.search;
+      if (typeof window === 'undefined') return;
+      const hasHashTokens = window.location.hash && (
+        window.location.hash.includes('access_token=') ||
+        window.location.hash.includes('refresh_token=') ||
+        window.location.hash.includes('provider_token=')
+      );
+      const url = new URL(window.location.href);
+      const hasPkceParams = url.searchParams.has('code') || url.searchParams.has('state');
+
+      if (hasHashTokens || hasPkceParams) {
+        // Remove hash and PKCE params while preserving path + other search params
+        url.hash = '';
+        url.searchParams.delete('code');
+        url.searchParams.delete('state');
+        const cleanUrl = url.pathname + (url.searchParams.toString() ? `?${url.searchParams.toString()}` : '');
         window.history.replaceState({}, document.title, cleanUrl);
       }
     };
