@@ -122,6 +122,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    const clearOAuthHashFromUrl = () => {
+      if (typeof window !== 'undefined' && window.location.hash &&
+          (window.location.hash.includes('access_token=') || window.location.hash.includes('refresh_token=') || window.location.hash.includes('provider_token=') )) {
+        const cleanUrl = window.location.pathname + window.location.search;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    };
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -129,6 +137,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user) {
+          // Clean up the OAuth hash fragment once we have a session
+          clearOAuthHashFromUrl();
           // Defer profile fetch to avoid deadlock
           setTimeout(async () => {
             const profileData = await ensureProfileExists(session.user!);
@@ -148,6 +158,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       
       if (session?.user) {
+        // In case the SDK already parsed tokens on first load, clear the hash
+        clearOAuthHashFromUrl();
         setTimeout(async () => {
           const profileData = await ensureProfileExists(session.user!);
           setProfile(profileData);
